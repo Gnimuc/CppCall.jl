@@ -1,0 +1,20 @@
+name = "CppCall"
+uuid = "f8cf9361-dadf-4655-ba37-7d4cfa6bff53"
+version = "0.1.0"
+authors = ["Yupei Qi <qiyupei@gmail.com>"]
+
+[deps]
+ClangCompiler = "06fc9500-c033-43bc-8ca2-e20da63309d9"
+CppInterOp = "13f4c181-cae7-41d1-84d4-2ea5f5fafb15"
+
+[compat]
+ClangCompiler = "~0.1"
+CppInterOp = "~0.1"
+julia = "1.12"
+
+[extras]
+Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+Logging = "56ddb016-857b-54e1-b83d-db4d58db5568"
+
+[targets]
+test = ["Test", "Logging"]
