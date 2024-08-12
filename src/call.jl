@@ -80,8 +80,8 @@ end
     get_param_num(func) != length(args) && return false
     for i = 1:length(args)
         argty = args[i]
-        @assert argty <: CppObject || argty <: Ref "argument types should be `CppObject`, got a $argty"
-        fromty = argty <: CppObject ? unwrap_type(argty) : argty
+        @assert argty <: CppObject "argument types should be `CppObject`, got a $argty"
+        fromty = argty
         clty = get_param_type(func, i)
         toty = to_jl(clty)
         # @show fromty, toty
@@ -90,7 +90,7 @@ end
     return true
 end
 
-@inline function cppinvoke(x::CXScope, self::Ptr{Cvoid}, result::Union{CppObject,Ptr{Cvoid},Base.RefValue}, args...)
+@inline function cppinvoke(x::CXScope, self::Ptr{Cvoid}, result::Union{CppObject,Ptr}, args...)
     ret_ptr = unsafe_pointer(result)
     arg_ptrs = [unsafe_pointer(x) for x in args]
     GC.@preserve result args invoke(x, ret_ptr, arg_ptrs, self)

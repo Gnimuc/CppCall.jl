@@ -15,16 +15,16 @@ void pbp(int* ptr) {
     }
 }
 
-void pbcp(const int* ptr) {
+void pbp2c(const int* ptr) {
     if (ptr) {
-        std::cout << "Value (by const pointer): " << *ptr << std::endl;
+        std::cout << "Value (by pointer to const): " << *ptr << std::endl;
     }
 }
 
-void pbp2c(int* const ptr) {
+void pbcp(int* const ptr) {
     if (ptr) {
         (*ptr)++;
-        std::cout << "Value (by pointer to const): " << *ptr << std::endl;
+        std::cout << "Value (by const pointer): " << *ptr << std::endl;
     }
 }
 

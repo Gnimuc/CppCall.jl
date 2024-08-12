@@ -2,80 +2,76 @@ using CppCall
 using Logging
 using Test
 
-# @include "./include"
-# @test_logs min_level=Logging.Error declare"""#include "func.h" """
-
-# x = CppObject{Cint}(0)
-# @fcall pblvr(x)
-# @test x[] == 1
-
 @testset "Function Call" begin
     @include "./include"
 
     @test_logs min_level=Logging.Error declare"""#include "func.h" """
 
     # void pbv(int value);
-    x = CppObject{Cint}(0)
+    x = @cppinit Cint
     @fcall pbv(x)
     @test x[] == 0
 
     # void pbp(int* ptr);
-    x = CppObject{Cint}(0)
-    px = Ref(x)
+    x = @cppinit Cint
+    px = @ptr x
     @fcall pbp(px)
     @test x[] == 1
 
-    # void pbcp(const int* ptr);
-    x = @cppobj cppty"int"c
-    px = Ref(x)
-    @fcall pbcp(px)
+    # void pbp2c(const int* ptr);
+    x = @cppinit cppty"int"c
+    px = @ptr x
+    @fcall pbp2c(px)
     @test x[] == 0
 
-    # void pbp2c(int* const ptr);
-    x = CppObject{Cint}(0)
-    px = Ref(x)
-    @fcall pbp2c(px)
+    # void pbcp(int* const ptr);
+    x = @cppinit Cint
+    px = @ptr x
+    @fcall pbcp(px)
     @test x[] == 1
+    cpx = @cptr x
+    @fcall pbcp(cpx)
+    @test x[] == 2
 
     # void pbcp2c(const int* const ptr);
-    x = @cppobj cppty"int"c
-    px = Ref(x)
+    x = @cppinit cppty"int"c
+    px = @ptr x
     @fcall pbcp2c(px)
     @test x[] == 0
 
     # void pblvr(int& ref);
-    x = CppObject{Cint}(0)
+    x = @cppinit Cint
     @fcall pblvr(x)
     @test x[] == 1
 
     # void pbclvr(const int& ref);
-    x = @cppobj cppty"int"c
+    x = @cppinit cppty"int"c
     @fcall pbclvr(x)
     @test x[] == 0
 
     # void pbrvr(int&& ref);
-    x = CppObject{Cint}(0)
+    x = @cppinit Cint
     @fcall pbrvr(x)
     @test x[] == 1
 
     # int rbv(void);
-    x = CppObject{Cint}(0)
+    x = @cppinit Cint
     @fcall x = rbv()
     @test x[] == 42
 
     # int* rbp(void);
-    # x = CppObject{Cint}(0)
-    # px = Ref(x)
-    # @fcall px = rbp()
-    # @test x[] == 42
+    p = @cppinit Ptr{cppty"int"}
+    @fcall px = rbp()
+    @test unsafe_load(px[]) == 42
 
     # int& rbr(void);
-    # x = CppObject{Cint}(0)
+    # x = @cppinit Cint
+    # px = @ptr x
     # @fcall x = rbr()
-    # @test x[] == 42
+    # @test unsafe_load(px[]) == 42
 
     # const int& rbcr(void);
-    # x = @cppobj cppty"int"c
+    # x = @cppinit cppty"int"c
     # @fcall x = rbcr()
     # @test x[] == 42
 end
@@ -85,13 +81,13 @@ end
 
     @test_logs min_level=Logging.Error declare"""#include "overloading.h" """
 
-    # void increment(int value);
-    x = @cppobj cppty"int"c
+    # void increment(const int& value);
+    x = @cppinit cppty"int"c
     @fcall increment(x)
     @test x[] == 0
 
     # void increment(double value);
-    x = CppObject{Cdouble}(0)
+    x = @cppinit Cdouble
     @fcall increment(x)
     @test x[] == 0.0
 end

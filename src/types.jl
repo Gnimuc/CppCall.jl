@@ -67,7 +67,7 @@ CppType(x::AbstractString, q::Qualifier=Unqualified) = CppType{Symbol(x),q}
 # C++ function type
 # See https://en.cppreference.com/w/cpp/language/functions for more details.
 """
-	struct CppFuncType{RT,ARGST} <: AbstractCppType
+    struct CppFuncType{RT,ARGST} <: AbstractCppType
 Capture the return type and argument types of a C++ function in Julia.
 
 `RT` is a [`CppType`](@ref) representing the return type.
@@ -79,7 +79,7 @@ get_rt(::Type{CppFuncType{RT,ARGST}}) where {RT,ARGST} = RT
 get_argst(::Type{CppFuncType{RT,ARGST}}) where {RT,ARGST} = ARGST
 
 """
-	struct CppTemplate{T<:CppType{S} where S,TARGS} <: AbstractCppType
+    struct CppTemplate{T<:CppType{S} where S,TARGS} <: AbstractCppType
 A templated type where `T` is the [`CppType`](@ref) to be templated and
 `TARGS` is a tuple of template arguments.
 """
@@ -106,15 +106,21 @@ primitive type GenericCppPtr{Q,T,AS} <: AbstractCppType sizeof(Int) end
 
 const CppPtr{Q,T} = GenericCppPtr{Q,T,Core.CPU}
 
+const CppCPtr{T} = CppPtr{C,T}
+const CppVPtr{T} = CppPtr{V,T}
+const CppCVPtr{T} = CppPtr{CV,T}
+
 Base.cconvert(::Type{Ptr{Cvoid}}, x::CppPtr{Q,T}) where {Q,T} = reinterpret(Ptr{T}, x)
 
 unwrap_type(::Type{CppPtr{Q,T}}) where {Q,T} = T
 
 """
-	struct CppRef{T} <: AbstractCppType
-Represent a generic qualified C++ reference.
+    struct CppRef{T} <: AbstractCppType
+Represent a C++ reference.
 """
 struct CppRef{T} <: AbstractCppType end
+
+unwrap_type(::Type{CppRef{T}}) where {T} = T
 
 """
     mutable struct CppObject{T,N} <: Any
@@ -124,8 +130,43 @@ mutable struct CppObject{T,N}
     data::NTuple{N,UInt8}
 end
 
+# zero-initialization
 CppObject{T,N}() where {T,N} = CppObject{T,N}(ntuple(Returns(0x00), N))
 
+# pointers
+function CppObject{Ptr}(x::CppObject{T}) where {T}
+    N = Core.sizeof(Int)
+    CppObject{Ptr{T},N}(reinterpret(NTuple{N,UInt8}, unsafe_pointer(x)))
+end
+
+function CppObject{CppCPtr}(x::CppObject{T}) where {T}
+    N = Core.sizeof(Int)
+    CppObject{CppCPtr{T},N}(reinterpret(NTuple{N,UInt8}, unsafe_pointer(x)))
+end
+
+function CppObject{CppVPtr}(x::CppObject{T}) where {T}
+    N = Core.sizeof(Int)
+    CppObject{CppVPtr{T},N}(reinterpret(NTuple{N,UInt8}, unsafe_pointer(x)))
+end
+
+function CppObject{CppCVPtr}(x::CppObject{T}) where {T}
+    N = Core.sizeof(Int)
+    CppObject{CppCVPtr{T},N}(reinterpret(NTuple{N,UInt8}, unsafe_pointer(x)))
+end
+
+is_const_ptr(::CppObject{Ptr{T}}) where {T} = false
+is_volatile_ptr(::CppObject{Ptr{T}}) where {T} = false
+
+is_const_ptr(::CppObject{CppCPtr{T}}) where {T} = true
+is_volatile_ptr(::CppObject{CppCPtr{T}}) where {T} = false
+
+is_const_ptr(::CppObject{CppVPtr{T}}) where {T} = false
+is_volatile_ptr(::CppObject{CppVPtr{T}}) where {T} = true
+
+is_const_ptr(::CppObject{CppCVPtr{T}}) where {T} = true
+is_volatile_ptr(::CppObject{CppCVPtr{T}}) where {T} = true
+
+# builtin types
 function CppObject{T}(x::S) where {T<:BuiltinTypes,S}
     N = Core.sizeof(T)
     CppObject{T,N}(reinterpret(NTuple{N,UInt8}, convert(T, x)))
@@ -154,12 +195,9 @@ function Base.setindex!(obj::CppObject{T,N}, x) where {T,N}
     return obj
 end
 
-unsafe_pointer(x::Ref) = Base.unsafe_convert(Ptr{Cvoid}, x)
 unsafe_pointer(x::CppObject) = Base.unsafe_convert(Ptr{Cvoid}, x)
-unsafe_pointer(x::Base.RefValue) = pointer_from_objref(x)
 unsafe_pointer(x::Ptr{Cvoid}) = x
 
-unwrap_type(::Type{Ref{T}}) where {T} = T
 unwrap_type(::Type{CppObject{T,N}}) where {T,N} = T
 unwrap_size(::Type{CppObject{T,N}}) where {T,N} = N
 
@@ -176,7 +214,7 @@ to_cpp(x::NamedDecl, I::CppInterpreter) = get_decl_type(get_ast_context(I), x)
 
 function to_cpp(::Type{Ptr{T}}, I::CppInterpreter) where T<:CppType{S,Q} where {S,Q}
     ast = get_ast_context(I)
-    get_pointer_type(ast, to_cpp(T, I))
+    return get_pointer_type(ast, to_cpp(T, I))
 end
 
 function to_cpp(::Type{CppType{S,Q}}, I::CppInterpreter) where {S,Q}

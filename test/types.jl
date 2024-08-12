@@ -170,13 +170,13 @@ end
     clty = to_cpp(lookup(I, "pbcp", FuncLookup()), I)
     func = to_jl(clty)
     @test get_rt(func) == Cvoid
-    @test get_argst(func) == Tuple{Ptr{CppType("int",CppCall.C)}}
+    @test get_argst(func) == Tuple{CppPtr{CppCall.C,Cint}}
 
     # void pbp2c(int* const ptr);
     clty = to_cpp(lookup(I, "pbp2c", FuncLookup()), I)
     func = to_jl(clty)
     @test get_rt(func) == Cvoid
-    @test get_argst(func) == Tuple{CppPtr{CppCall.C,Cint}}
+    @test get_argst(func) == Tuple{Ptr{CppType("int",CppCall.C)}}
 
     # void pbcp2c(const int* const ptr);
     clty = to_cpp(lookup(I, "pbcp2c", FuncLookup()), I)

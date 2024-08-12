@@ -6,6 +6,8 @@ This interface is used to implement custom type mappings when unwrapping `CppObj
 cpptypemap(::Type{T}) where {T} = error("missing type mapping for $T")
 
 cpptypemap(::Type{T}) where {T<:BuiltinTypes} = T
+cpptypemap(::Type{Ptr{T}}) where {T<:BuiltinTypes} = Ptr{T}
+cpptypemap(::Type{Ptr{T}}) where {T<:CppType} = Ptr{cpptypemap(T)}
 
 cpptypemap(::Type{CppType{:void,Q}}) where {Q} = T
 

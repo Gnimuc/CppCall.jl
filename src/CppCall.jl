@@ -34,7 +34,8 @@ include("lookup.jl")
 export LookupKind, TypeLookup, FuncLookup, FuncOverloadingLookup, lookup
 
 include("types.jl")
-export CppType, CppFunc, CppPtr, CppRef, CppObject
+export CppType, CppFunc, CppRef, CppObject
+export CppPtr, CppCPtr, CppVPtr, CppCVPtr
 
 include("typemaps.jl")
 export cpptypemap
@@ -42,7 +43,10 @@ export cpptypemap
 include("convert.jl")
 
 include("macros.jl")
-export @declare_str, @include, @cppty_str, @cppobj, @qualty_str
+export @declare_str, @include
+export @cppty_str, @qualty_str
+export @cppinit, @cppnew
+export @ptr, @cptr, @vptr, @cvptr
 
 include("registry.jl")
 export register, get_instance, get_instance_id

@@ -36,10 +36,10 @@ macro __INSTANCE__()
 end
 
 """
-    @cppobj cppty [args...]
-Create a C++ object of type `cppty` with the optional arguments.
+    @cppinit cppty
+Create a C++ object of type `cppty` with zero initialized values.
 """
-macro cppobj(cppty, args...)
+macro cppinit(cppty)
     @gensym CC_INSTANCE CC_CLTY CC_JLTY CC_SIZE
     return esc(quote
                    local $CC_INSTANCE = CppCall.get_instance($__module__)
@@ -47,6 +47,52 @@ macro cppobj(cppty, args...)
                    local $CC_JLTY = CppCall.to_jl($CC_CLTY)
                    local $CC_SIZE = CppCall.size_of(CppCall.get_ast_context($CC_INSTANCE), $CC_CLTY)
                    CppObject{$CC_JLTY,$CC_SIZE}()
+               end)
+end
+
+"""
+    @ptr obj
+Create a C++ object that represents a `Unqualified`-pointer to `obj`.
+"""
+macro ptr(obj)
+    return esc(:(CppObject{Ptr}($obj)))
+end
+
+"""
+    @cptr obj
+Create a C++ object that represents a `Const_Qualified`-pointer to `obj`.
+"""
+macro cptr(obj)
+    return esc(:(CppObject{CppCPtr}($obj)))
+end
+
+"""
+    @vptr obj
+Create a C++ object that represents a `Volatile_Qualified`-pointer to `obj`.
+"""
+macro vptr(obj)
+    return esc(:(CppObject{CppVPtr}($obj)))
+end
+
+"""
+    @cvptr obj
+Create a C++ object that represents a `Const_Volatile_Qualified`-pointer to `obj`.
+"""
+macro cvptr(obj)
+    return esc(:(CppObject{CppCVPtr}($obj)))
+end
+
+"""
+    @cppnew cppty [args...]
+Create a C++ object of type `cppty` with the given initialization values.
+"""
+macro cppnew(cppty, args...)
+    @gensym CC_INSTANCE CC_CLTY CC_JLTY
+    return esc(quote
+                   local $CC_INSTANCE = CppCall.get_instance($__module__)
+                   local $CC_CLTY = CppCall.to_cpp($cppty, $CC_INSTANCE)
+                   local $CC_JLTY = CppCall.to_jl($CC_CLTY)
+                   CppObject{$CC_JLTY}($(args...))
                end)
 end
 
@@ -58,7 +104,7 @@ macro cppty_str(name::AbstractString, flags...)
                     flag == "c" ? :(CppCall.C) :
                     flag == "v" ? :(CppCall.V) : :(CppCall.U)
     end
-    return :(CppType(strip($name),$qualifier))
+    return :(CppType(strip($name), $qualifier))
 end
 
 macro qualty_str(name::AbstractString, flags...)
