@@ -65,15 +65,14 @@ using Test
     @test unsafe_load(px[]) == 42
 
     # int& rbr(void);
-    # x = @cppinit Cint
-    # px = @ptr x
-    # @fcall x = rbr()
-    # @test unsafe_load(px[]) == 42
+    p = @cppinit Ptr{cppty"int"}
+    @fcall p = rbr()
+    @test unsafe_load(p[]) == 42
 
     # const int& rbcr(void);
-    # x = @cppinit cppty"int"c
-    # @fcall x = rbcr()
-    # @test x[] == 42
+    p = @cppinit Ptr{cppty"int"c}
+    @fcall p = rbcr()
+    @test unsafe_load(p[]) == 42
 end
 
 @testset "Function Overloading" begin
