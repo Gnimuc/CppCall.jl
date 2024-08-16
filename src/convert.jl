@@ -17,4 +17,8 @@ is_convertible(::Type{S}, ::Type{CppRef{T}}) where {N,T,S<:CppObject{T,N}} = tru
 # is_convertible(::Type{S}, ::Type{CppRef{T}}) where {N,T<:BuiltinTypes,S<:CppObject{T,N}} = true
 
 is_convertible(::Type{S}, ::Type{CppCPtr{T}}) where {N,T,S<:CppObject{Ptr{T},N}} = true
+is_convertible(::Type{S}, ::Type{CppCPtr{T}}) where {N,NP,T,U<:CppObject{T,N},S<:CppObject{Ptr{U},NP}} = true
+is_convertible(::Type{S}, ::Type{CppCPtr{T}}) where {N,NP,T,U<:CppObject{T,N},S<:CppObject{CppCPtr{U},NP}} = true
+
 is_convertible(::Type{S}, ::Type{Ptr{T}}) where {N,T,S<:CppObject{CppCPtr{T},N}} = true
+is_convertible(::Type{S}, ::Type{Ptr{T}}) where {N,NP,T,U<:CppObject{T,N},S<:CppObject{Ptr{U},NP}} = true

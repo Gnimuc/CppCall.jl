@@ -46,7 +46,7 @@ include("macros.jl")
 export @declare_str, @include
 export @cppty_str, @qualty_str
 export @cppinit, @cppnew
-export @ptr, @cptr, @vptr, @cvptr
+export @ptr, @cptr, @vptr, @cvptr, @ref
 
 include("registry.jl")
 export register, get_instance, get_instance_id

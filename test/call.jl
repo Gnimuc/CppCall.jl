@@ -61,8 +61,11 @@ using Test
 
     # int* rbp(void);
     p = @cppinit Ptr{cppty"int"}
-    @fcall px = rbp()
-    @test unsafe_load(px[]) == 42
+    @fcall p = rbp()
+    @test unsafe_load(p[]) == 42
+    p = @cppinit Ptr{Cint}
+    @fcall p = rbp()
+    @test unsafe_load(p[]) == 42
 
     # int& rbr(void);
     p = @cppinit Ptr{cppty"int"}

@@ -130,28 +130,52 @@ mutable struct CppObject{T,N}
     data::NTuple{N,UInt8}
 end
 
+Base.isassigned(x::CppObject) = isdefined(x, :data)
+
+function Base.unsafe_convert(P::Union{Type{Ptr{T}},Type{Ptr{Cvoid}}}, x::CppObject{T})::P where {T}
+    p = pointer_from_objref(x)
+    p == C_NULL && throw(UndefRefError())
+    return p
+end
+# Base.unsafe_convert(::Type{Ptr{Any}}, x::CppObject{Any})::Ptr{Any} = pointer_from_objref(x)
+
+Base.convert(::Type{T}, x::CppObject) where {T} = reinterpret(T, x.data)
+
+Base.getindex(obj::CppObject{T}) where {T} = convert(cpptypemap(T), obj)
+
+function Base.setindex!(obj::CppObject{T,N}, x) where {T,N}
+    obj.data = reinterpret(NTuple{N,UInt8}, convert(cpptypemap(T), x))
+    return x
+end
+
+unsafe_pointer(x::CppObject) = Base.unsafe_convert(Ptr{Cvoid}, x)
+unsafe_pointer(x::Ptr{Cvoid}) = x
+
+unwrap_type(::Type{CppObject{T,N}}) where {T,N} = T
+unwrap_size(::Type{CppObject{T,N}}) where {T,N} = N
+
 # zero-initialization
 CppObject{T,N}() where {T,N} = CppObject{T,N}(ntuple(Returns(0x00), N))
 
 # pointers
-function CppObject{Ptr}(x::CppObject{T}) where {T}
-    N = Core.sizeof(Int)
-    CppObject{Ptr{T},N}(reinterpret(NTuple{N,UInt8}, unsafe_pointer(x)))
+function CppObject{Ptr}(x::CppObject{T,N}) where {T,N}
+    S = Core.sizeof(Int)
+    CppObject{Ptr{CppObject{T,N}},S}(reinterpret(NTuple{S,UInt8}, unsafe_pointer(x)))
 end
 
-function CppObject{CppCPtr}(x::CppObject{T}) where {T}
-    N = Core.sizeof(Int)
-    CppObject{CppCPtr{T},N}(reinterpret(NTuple{N,UInt8}, unsafe_pointer(x)))
+function CppObject{CppCPtr}(x::CppObject{T,N}) where {T,N}
+    S = Core.sizeof(Int)
+    CppObject{CppCPtr{CppObject{T,N}},S}(reinterpret(NTuple{S,UInt8}, unsafe_pointer(x)))
 end
 
-function CppObject{CppVPtr}(x::CppObject{T}) where {T}
-    N = Core.sizeof(Int)
-    CppObject{CppVPtr{T},N}(reinterpret(NTuple{N,UInt8}, unsafe_pointer(x)))
+function CppObject{CppVPtr}(x::CppObject{T,N}) where {T,N}
+    S = Core.sizeof(Int)
+    CppObject{CppVPtr{CppObject{T,N}},S}(reinterpret(NTuple{S,UInt8}, unsafe_pointer(x)))
 end
 
-function CppObject{CppCVPtr}(x::CppObject{T}) where {T}
-    N = Core.sizeof(Int)
-    CppObject{CppCVPtr{T},N}(reinterpret(NTuple{N,UInt8}, unsafe_pointer(x)))
+function CppObject{CppCVPtr}(x::CppObject{T,N}) where {T,N}
+    S = Core.sizeof(Int)
+    CppObject{CppCVPtr{CppObject{T,N}},S}(reinterpret(NTuple{S,UInt8}, unsafe_pointer(x)))
 end
 
 is_const_ptr(::CppObject{Ptr{T}}) where {T} = false
@@ -166,6 +190,29 @@ is_volatile_ptr(::CppObject{CppVPtr{T}}) where {T} = true
 is_const_ptr(::CppObject{CppCVPtr{T}}) where {T} = true
 is_volatile_ptr(::CppObject{CppCVPtr{T}}) where {T} = true
 
+# references
+function CppObject{CppRef}(x::CppObject{T,N}) where {T,N}
+    S = Core.sizeof(Int)
+    return CppObject{CppRef{CppObject{T,N}},S}(reinterpret(NTuple{S,UInt8}, pointer_from_objref(x)))
+end
+
+# there is no reference to reference in C++
+CppObject{CppRef}(x::CppObject{CppRef{T},N}) where {T,N} = x
+
+# Base.getindex(x::CppObject{CppRef{T},N}) where {T,N} = error("C++ references cannot be dereferenced.")
+
+function Base.getindex(x::CppObject{CppRef{T},N}) where {T,N}
+    ptr = reinterpret(Ptr{NTuple{N,UInt8}}, x.data)
+    refee = unsafe_pointer_to_objref(ptr)
+    return refee[]
+end
+
+function Base.setindex!(obj::CppObject{CppRef{CppObject{T,N}}}, x) where {T,N}
+    ptr = reinterpret(Ptr{NTuple{N,UInt8}}, obj.data)
+    unsafe_store!(ptr, reinterpret(NTuple{N,UInt8}, convert(cpptypemap(T), x)))
+    return x
+end
+
 # builtin types
 function CppObject{T}(x::S) where {T<:BuiltinTypes,S}
     N = Core.sizeof(T)
@@ -177,42 +224,19 @@ function CppObject{T}(x::S) where {T,S}
     CppObject{T,N}(reinterpret(NTuple{N,UInt8}, x))
 end
 
-Base.isassigned(x::CppObject) = isdefined(x, :data)
-
-function Base.unsafe_convert(P::Union{Type{Ptr{T}},Type{Ptr{Cvoid}}}, x::CppObject{T})::P where T
-    p = pointer_from_objref(x)
-    p == C_NULL && throw(UndefRefError())
-    return p
-end
-# Base.unsafe_convert(::Type{Ptr{Any}}, x::CppObject{Any})::Ptr{Any} = pointer_from_objref(x)
-
-Base.convert(::Type{T}, x::CppObject) where {T} = reinterpret(T, x.data)
-
-Base.getindex(obj::CppObject{T,N}) where {T,N} = convert(cpptypemap(T), obj)
-
-function Base.setindex!(obj::CppObject{T,N}, x) where {T,N}
-    obj.data = reinterpret(NTuple{N,UInt8}, convert(cpptypemap(T), x))
-    return obj
-end
-
-unsafe_pointer(x::CppObject) = Base.unsafe_convert(Ptr{Cvoid}, x)
-unsafe_pointer(x::Ptr{Cvoid}) = x
-
-unwrap_type(::Type{CppObject{T,N}}) where {T,N} = T
-unwrap_size(::Type{CppObject{T,N}}) where {T,N} = N
-
 # type mapping
 """
-	to_cpp(::Type{T}, I::CppInterpreter) -> QualType
+    to_cpp(::Type{T}, I::CppInterpreter) -> QualType
 Return a Clang type in memory representation corresponding to the Julia type `T`.
 """
 to_cpp(::Type{T}, I::CppInterpreter) where {T<:AbstractCppType} = error("Unsupported type: $T")
 
 to_cpp(::Type{T}, I::CppInterpreter) where {T<:BuiltinTypes} = get_qual_type(jlty_to_clty(T, get_ast_context(I)))
+to_cpp(::Type{Ptr{T}}, I::CppInterpreter) where {T<:BuiltinTypes} = get_pointer_type(get_ast_context(I), to_cpp(T, I))
 
 to_cpp(x::NamedDecl, I::CppInterpreter) = get_decl_type(get_ast_context(I), x)
 
-function to_cpp(::Type{Ptr{T}}, I::CppInterpreter) where T<:CppType{S,Q} where {S,Q}
+function to_cpp(::Type{Ptr{T}}, I::CppInterpreter) where {T<:CppType{S,Q}} where {S,Q}
     ast = get_ast_context(I)
     return get_pointer_type(ast, to_cpp(T, I))
 end
@@ -261,7 +285,7 @@ function get_name(x::AbstractType)
 end
 
 """
-	to_jl(x)
+    to_jl(x)
 Return the Julia representation of a Clang type.
 """
 to_jl(x) = x
@@ -326,7 +350,9 @@ to_jl(x::ElaboratedType) = to_jl(desugar(x))
 to_jl(x::TypedefType, ::Qualifier) = to_jl(x)
 to_jl(x::TypedefType) = to_jl(desugar(x))
 
-to_jl(x::PointerType, q::Qualifier=Unqualified) = q == Unqualified ? Ptr{to_jl(get_pointee_type(x))} : CppPtr{q,to_jl(get_pointee_type(x))}
+function to_jl(x::PointerType, q::Qualifier=Unqualified)
+    q == Unqualified ? Ptr{to_jl(get_pointee_type(x))} : CppPtr{q,to_jl(get_pointee_type(x))}
+end
 
 to_jl(x::LValueReferenceType, ::Qualifier) = to_jl(x)
 to_jl(x::LValueReferenceType) = CppRef{to_jl(get_pointee_type(x))}

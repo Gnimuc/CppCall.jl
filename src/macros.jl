@@ -83,6 +83,24 @@ macro cvptr(obj)
 end
 
 """
+    @ref obj
+Create a C++ object that represents a reference to `obj`.
+"""
+macro ref(obj)
+    @gensym CC_VAR CC_X
+    return esc(
+        quote
+            $CC_VAR = CppObject{CppRef}($obj)
+            finalizer($CC_VAR) do $CC_X
+                CppCall.gcuse($obj)
+                $CC_X
+            end
+            $CC_VAR
+        end
+    )
+end
+
+"""
     @cppnew cppty [args...]
 Create a C++ object of type `cppty` with the given initialization values.
 """
