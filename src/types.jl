@@ -149,33 +149,55 @@ function Base.setindex!(obj::CppObject{T,N}, x) where {T,N}
 end
 
 unsafe_pointer(x::CppObject) = Base.unsafe_convert(Ptr{Cvoid}, x)
+unsafe_pointer(x::CppObject{CppRef{CppObject{T,N}},NR}) where {T,N,NR} = reinterpret(Ptr{T}, x.data)
+unsafe_pointer(x::CppObject{CppRef{T},N}) where {T,N} = reinterpret(Ptr{T}, x.data)
 unsafe_pointer(x::Ptr{Cvoid}) = x
+
+unsafe_pointer_rt(x::CppObject) = Base.unsafe_convert(Ptr{Cvoid}, x)
+unsafe_pointer_rt(x::CppObject{CppRef{T},N}) where {T,N} = pointer_from_objref(x)
+unsafe_pointer_rt(x::Ptr{Cvoid}) = x
 
 unwrap_type(::Type{CppObject{T,N}}) where {T,N} = T
 unwrap_size(::Type{CppObject{T,N}}) where {T,N} = N
 
 # zero-initialization
 CppObject{T,N}() where {T,N} = CppObject{T,N}(ntuple(Returns(0x00), N))
+CppObject{CppRef{T}}() where {T} = CppObject{CppRef{T},Core.sizeof(Int)}()
+CppObject{Ptr{T}}() where {T} = CppObject{Ptr{T},Core.sizeof(Int)}()
+# CppObject{T}() where {T<:BuiltinTypes} = CppObject{T,Core.sizeof(T)}()
+
 
 # pointers
+# with the current design it's a bit tricky to make a difference between:
+# - CppObject{Ptr{CppType{T}}} -> represents a heap-allocated pointer
+# - CppObject{Ptr{CppObject{CppType{T}}}} -> represents a heap-allocated pointer to a heap-allocated object
+# the former doesn't store the size of the C++ type, dereferencing the pointer is required to
+# lookup the size of the type explicitly, while the latter does store the size, so it can be
+# dereferenced directly via `unsafe_load`.
+# the former should be used if the details of the type are not important (e.g. representing opaque pointers)
+# the latter can be used like a `WeakRef`, it doesn't extend the lifetime of the object, so
+# `GC.@preserve` should be used to keep the underlying object alive, when the object is allocated by Julia.
+#
+# note that, unlike references, pointers can be dangling, so it's important to keep track of the
+# lifetime of the object they point to, especially when the object is allocated by Julia's GC.
 function CppObject{Ptr}(x::CppObject{T,N}) where {T,N}
     S = Core.sizeof(Int)
-    CppObject{Ptr{CppObject{T,N}},S}(reinterpret(NTuple{S,UInt8}, unsafe_pointer(x)))
+    return GC.@preserve x CppObject{Ptr{CppObject{T,N}},S}(reinterpret(NTuple{S,UInt8}, pointer_from_objref(x)))
 end
 
 function CppObject{CppCPtr}(x::CppObject{T,N}) where {T,N}
     S = Core.sizeof(Int)
-    CppObject{CppCPtr{CppObject{T,N}},S}(reinterpret(NTuple{S,UInt8}, unsafe_pointer(x)))
+    return GC.@preserve x CppObject{CppCPtr{CppObject{T,N}},S}(reinterpret(NTuple{S,UInt8}, pointer_from_objref(x)))
 end
 
 function CppObject{CppVPtr}(x::CppObject{T,N}) where {T,N}
     S = Core.sizeof(Int)
-    CppObject{CppVPtr{CppObject{T,N}},S}(reinterpret(NTuple{S,UInt8}, unsafe_pointer(x)))
+    return GC.@preserve x CppObject{CppVPtr{CppObject{T,N}},S}(reinterpret(NTuple{S,UInt8}, pointer_from_objref(x)))
 end
 
 function CppObject{CppCVPtr}(x::CppObject{T,N}) where {T,N}
     S = Core.sizeof(Int)
-    CppObject{CppCVPtr{CppObject{T,N}},S}(reinterpret(NTuple{S,UInt8}, unsafe_pointer(x)))
+    return GC.@preserve x CppObject{CppCVPtr{CppObject{T,N}},S}(reinterpret(NTuple{S,UInt8}, pointer_from_objref(x)))
 end
 
 is_const_ptr(::CppObject{Ptr{T}}) where {T} = false
@@ -191,17 +213,26 @@ is_const_ptr(::CppObject{CppCVPtr{T}}) where {T} = true
 is_volatile_ptr(::CppObject{CppCVPtr{T}}) where {T} = true
 
 # references
+# references are implemented as pointers:
+# - CppObject{Ref{CppType{T}}} -> a CppObject that represents a reference
+# - CppObject{Ref{CppObject{CppType{T}}}} -> a CppObject that represents a reference to a CppObject
+# the former is used when the original object is unknown, for example, it is used as the
+# return type of a C++ function which returns a reference. but unlike C++, the return value
+# doesn't extend the lifetime of the original object. if the original object is allocated by Julia,
+# `GC.@preserve` should be used to keep the object alive.
+# the latter is used to create a reference to a CppObject that is allocated by Julia GC,
+# the `@ref` macro needs to be used to extend the lifetime of the object.
 function CppObject{CppRef}(x::CppObject{T,N}) where {T,N}
     S = Core.sizeof(Int)
-    return CppObject{CppRef{CppObject{T,N}},S}(reinterpret(NTuple{S,UInt8}, pointer_from_objref(x)))
+    return GC.@preserve x CppObject{CppRef{CppObject{T,N}},S}(reinterpret(NTuple{S,UInt8}, pointer_from_objref(x)))
 end
 
 # there is no reference to reference in C++
 CppObject{CppRef}(x::CppObject{CppRef{T},N}) where {T,N} = x
 
-# Base.getindex(x::CppObject{CppRef{T},N}) where {T,N} = error("C++ references cannot be dereferenced.")
+Base.getindex(x::CppObject{CppRef{T},N}) where {T,N} = error("C++ references cannot be dereferenced.")
 
-function Base.getindex(x::CppObject{CppRef{T},N}) where {T,N}
+function Base.getindex(x::CppObject{CppRef{CppObject{T,N}},NR}) where {T,N,NR}
     ptr = reinterpret(Ptr{NTuple{N,UInt8}}, x.data)
     refee = unsafe_pointer_to_objref(ptr)
     return refee[]

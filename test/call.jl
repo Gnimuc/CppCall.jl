@@ -7,75 +7,121 @@ using Test
 
     @test_logs min_level=Logging.Error declare"""#include "func.h" """
 
-    # void pbv(int value);
+    @info "invoke `void pbv(int value)`"
     x = @cppinit Cint
     @fcall pbv(x)
     @test x[] == 0
+    xref = @ref x
+    @test_throws ArgumentError @fcall pbv(xref) # unlike C++, passing reference as value is not allowed
 
-    # void pbp(int* ptr);
+    @info "invoke `void pbp(int* ptr)`: "
     x = @cppinit Cint
     px = @ptr x
-    @fcall pbp(px)
+    GC.@preserve x @fcall pbp(px)
     @test x[] == 1
-
-    # void pbp2c(const int* ptr);
+    x = @cppinit cppty"int"
+    x[] = 1
+    px = @ptr x
+    GC.@preserve x @fcall pbp(px)
+    @test x[] == 2
     x = @cppinit cppty"int"c
     px = @ptr x
-    @fcall pbp2c(px)
+    @test_throws ArgumentError GC.@preserve x @fcall pbp(px) # ambiguous call
+
+    @info "invoke `void pbp2c(const int* ptr)`: "
+    x = @cppinit cppty"int"c
+    px = @ptr x
+    GC.@preserve x @fcall pbp2c(px)
+    @test x[] == 0
+    x = @cppinit cppty"int"
+    px = @ptr x
+    GC.@preserve x @fcall pbp2c(px) # this is ok
     @test x[] == 0
 
-    # void pbcp(int* const ptr);
+    @info "invoke `void pbcp(int* const ptr)`: "
     x = @cppinit Cint
     px = @ptr x
-    @fcall pbcp(px)
+    GC.@preserve x @fcall pbcp(px)
     @test x[] == 1
     cpx = @cptr x
-    @fcall pbcp(cpx)
+    GC.@preserve x @fcall pbcp(cpx)
     @test x[] == 2
-
-    # void pbcp2c(const int* const ptr);
     x = @cppinit cppty"int"c
     px = @ptr x
-    @fcall pbcp2c(px)
+    @test_throws ArgumentError GC.@preserve x @fcall pbcp(px) # no permissive
+    x = @cppinit cppty"int"
+    x[] = 2
+    px = @ptr x
+    GC.@preserve x @fcall pbcp(px)
+    @test x[] == 3
+
+    @info "invoke `void pbcp2c(const int* const ptr)`: "
+    x = @cppinit cppty"int"c
+    px = @ptr x
+    GC.@preserve x @fcall pbcp2c(px)
+    @test x[] == 0
+    x = @cppinit cppty"int"
+    px = @ptr x
+    GC.@preserve x @fcall pbcp2c(px)
+    @test x[] == 0
+    x = @cppinit Cint
+    px = @ptr x
+    GC.@preserve x @fcall pbcp2c(px)
     @test x[] == 0
 
-    # void pblvr(int& ref);
+    @info "invoke `void pblvr(int& ref)`: "
     x = @cppinit Cint
     @fcall pblvr(x)
     @test x[] == 1
-
-    # void pbclvr(const int& ref);
+    xref = @ref x
+    @fcall pblvr(xref)
+    @test x[] == 2
     x = @cppinit cppty"int"c
-    @fcall pbclvr(x)
-    @test x[] == 0
+    @test_throws ArgumentError @fcall pblvr(x) # should not discard const-qualifier
+    xref = @ref x
+    @test_throws ArgumentError @fcall pblvr(xref) # should not discard const-qualifier
 
-    # void pbrvr(int&& ref);
+    @info "invoke `void pbclvr(const int& ref)`: "
+    x = @cppinit cppty"int"c
+    x[] = 1 # FIXME: this should not be allowed
+    @fcall pbclvr(x)
+    @test x[] == 1
+    xref = @ref x
+    xref[] = 2 # FIXME: this should not be allowed
+    @fcall pbclvr(xref)
+    @test x[] == 2
+    x = @cppinit cppty"int"
+    x[] = 1
+    @fcall pbclvr(x)
+    @test x[] == 1
+    xref = @ref x
+    xref[] = 2
+    @fcall pbclvr(xref)
+    @test x[] == 2
+
+    @info "invoke `void pbrvr(int&& ref)`: " # FIXME: this should not be allowed
     x = @cppinit Cint
     @fcall pbrvr(x)
     @test x[] == 1
 
-    # int rbv(void);
-    x = @cppinit Cint
-    @fcall x = rbv()
+    @info "invoke `int rbv(void)`: "
+    x = @fcall rbv()
     @test x[] == 42
 
-    # int* rbp(void);
-    p = @cppinit Ptr{cppty"int"}
-    @fcall p = rbp()
-    @test unsafe_load(p[]) == 42
-    p = @cppinit Ptr{Cint}
-    @fcall p = rbp()
+    @info "invoke `int* rbp(void)`: "
+    p = @fcall rbp()
     @test unsafe_load(p[]) == 42
 
-    # int& rbr(void);
-    p = @cppinit Ptr{cppty"int"}
-    @fcall p = rbr()
-    @test unsafe_load(p[]) == 42
+    @info "invoke `int& rbr(void)`: "
+    p = @fcall rbr()
+    @fcall pblvr(p)
+    v = @fcall rbvpbr(p)
+    @test v[] == 43 # can only be tested once
 
-    # const int& rbcr(void);
-    p = @cppinit Ptr{cppty"int"c}
-    @fcall p = rbcr()
-    @test unsafe_load(p[]) == 42
+    @info "invoke `const int& rbcr(void)`: "
+    p = @fcall rbcr()
+    @fcall pbclvr(p)
+    @test_throws ArgumentError @fcall pblvr(p)
 end
 
 @testset "Function Overloading" begin

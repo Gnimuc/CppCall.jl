@@ -15,15 +15,8 @@ end
 # @fcall ::x::y::z()
 # @fcall x::y::z()
 macro fcall(expr)
-    if !Meta.isexpr(expr, :(=))
-        ret = nothing
-        func_expr = expr
-    else
-        ret, func_expr = expr.args
-    end
-
+    func_expr = expr
     func_name = nns(func_expr)
-
     call_expr = func_expr
     while !Meta.isexpr(call_expr, :call)
         call_expr = call_expr.args[end]
@@ -35,29 +28,46 @@ macro fcall(expr)
 
     args = call_expr.args[2:end]
 
-    result = isnothing(ret) ? C_NULL : ret
-
     @gensym CC_ID CC_CTX CC_FUNC
     return esc(quote
                    local $CC_ID = CppCall.get_instance_id($__module__)
                    local $CC_CTX = CppCall.CppContext{$CC_ID}()
                    local $CC_FUNC = CppCall.CppIdentifier{Symbol($func_name)}()
-                   CppCall.cppgfcall($CC_CTX, $CC_FUNC, $result, $(args...))
+                   CppCall.cppgfcall($CC_CTX, $CC_FUNC, $(args...))
                end)
 end
 
 struct CppContext{ID} end
 struct CppIdentifier{S} end
 
-@generated function cppgfcall(::CppContext{ID}, ::CppIdentifier{S}, result, args...) where {ID,S}
+@generated function cppgfcall(::CppContext{ID}, ::CppIdentifier{S}, args...) where {ID,S}
     I = CPPCALL_INSTANCES[ID]
     candidates = lookup(I, string(S), FuncOverloadingLookup())
     func = dispatch(I, candidates, args)
-    isnothing(func) && throw(ArgumentError("no matching function call for argument types: $args"))
+    isnothing(func) && throw(ArgumentError("no matching function for call to `$(err_signature(first(candidates), args))`"))
     scope = make_scope(func, I)
-    return quote
-        Base.@_inline_meta
-        return cppinvoke($scope, C_NULL, result, args...)
+    clty = get_return_type(clty_to_jlty(get_type_ptr(to_cpp(func, I)))) # TODO: cache func lookup results
+    retty = to_jl(clty)
+    if retty == Cvoid
+        return quote
+            Base.@_inline_meta
+            cppinvoke($scope, C_NULL, C_NULL, args...)
+        end
+    elseif retty <: CppRef
+        return quote
+            Base.@_inline_meta
+            ret = CppObject{$retty}()
+            cppinvoke($scope, C_NULL, ret, args...)
+            return ret
+        end
+    else
+        sz = size_of(get_ast_context(I), clty)
+        return quote
+            Base.@_inline_meta
+            ret = CppObject{$retty,$sz}()
+            cppinvoke($scope, C_NULL, ret, args...)
+            return ret
+        end
     end
 end
 
@@ -69,7 +79,7 @@ function dispatch(I::CppInterpreter, candidates::Vector{NamedDecl}, args)
         if !isnothing(func)
             CC.dump(x)
             CC.dump(func)
-            throw(ArgumentError("ambiguous function call `$(CC.getName(x))` with argument types: $args"))
+            throw(ArgumentError("call of overloaded `$(err_signature(func, args))` is ambiguous."))
         end
         func = x
     end
@@ -91,7 +101,7 @@ end
 end
 
 @inline function cppinvoke(x::CXScope, self::Ptr{Cvoid}, result::Union{CppObject,Ptr}, args...)
-    ret_ptr = unsafe_pointer(result)
+    ret_ptr = unsafe_pointer_rt(result)
     arg_ptrs = [unsafe_pointer(x) for x in args]
-    GC.@preserve result args invoke(x, ret_ptr, arg_ptrs, self)
+    return GC.@preserve result args invoke(x, ret_ptr, arg_ptrs, self)
 end

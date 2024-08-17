@@ -49,22 +49,30 @@ void pbrvr(int&& ref) {
 }
 
 int rbv(void) {
+    std::cout << "Value (by value): 42" << std::endl;
     return 42;
 }
 
 int* rbp(void) {
     static int value = 42;
+    std::cout << "Value (by pointer): " << value << std::endl;
     return &value;
 }
 
 int& rbr(void) {
     static int value = 42;
+    std::cout << "Value (by reference): " << value << std::endl;
     return value;
 }
 
 const int& rbcr(void) {
     static int value = 42;
+    std::cout << "Value (by const reference): " << value << std::endl;
     return value;
+}
+
+int rbvpbr(int& ref) {
+    return ref;
 }
 
 #endif // CPPCALL_FUNC_H
