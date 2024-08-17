@@ -1,3 +1,21 @@
+const BuiltinTypeMap = [
+    ("void", :Cvoid),
+    ("char", :Cchar),
+    ("unsigned char", :Cuchar),
+    ("signed char", :Cchar),
+    ("short", :Cshort),
+    ("unsigned short", :Cushort),
+    ("int", :Cint),
+    ("unsigned int", :Cuint),
+    ("long", :Clong),
+    ("unsigned long", :Culong),
+    ("long long", :Clonglong),
+    ("unsigned long long", :Culonglong),
+    ("float", :Cfloat),
+    ("double", :Cdouble),
+    ("_Bool", :Bool),
+]
+
 """
     cppconvert(T, x)
 Convert `x` to a value to be passed to C++ code as type `T`.
@@ -13,6 +31,19 @@ function is_convertible end
 is_convertible(::Type{S}, ::Type{T}) where {T,S} = false
 is_convertible(::Type{S}, ::Type{T}) where {N,T,S<:CppObject{T,N}} = true
 
+# const T& -> T
+is_convertible(::Type{S}, ::Type{T}) where {N,T,S<:CppObject{CppRef{CppType{T,C}},N}} = true
+for (cppty, jlty) in BuiltinTypeMap
+    @eval is_convertible(::Type{S}, ::Type{$jlty}) where {N,S<:CppObject{CppRef{CppType{Symbol($cppty),C}},N}} = true
+end
+is_convertible(::Type{S}, ::Type{T}) where {N,NR,T,U<:CppObject{CppType{T,C},N},S<:CppObject{CppRef{U},NR}} = true
+for (cppty, jlty) in BuiltinTypeMap
+    @eval is_convertible(::Type{S}, ::Type{$jlty}) where {N,NR,U<:CppObject{CppType{Symbol($cppty),C},N},S<:CppObject{CppRef{U},NR}} = true
+end
+
+# T& -> T
+# is_convertible(::Type{S}, ::Type{T}) where {N,NR,T,U<:CppObject{T,N},S<:CppObject{CppRef{U},NR}} = true
+
 # CppRef
 is_convertible(::Type{S}, ::Type{CppRef{T}}) where {N,T,S<:CppObject{T,N}} = true
 is_convertible(::Type{S}, ::Type{CppRef{T}}) where {N,NR,T,U<:CppObject{T,N},S<:CppObject{CppRef{U},NR}} = true
@@ -27,7 +58,7 @@ is_convertible(::Type{S}, ::Type{Ptr{T}}) where {N,T,S<:CppObject{CppCPtr{T},N}}
 is_convertible(::Type{S}, ::Type{Ptr{T}}) where {N,NP,T,U<:CppObject{T,N},S<:CppObject{Ptr{U},NP}} = true
 is_convertible(::Type{S}, ::Type{Ptr{CppType{T,C}}}) where {N,NP,T,U<:CppObject{CppType{T,U},N},S<:CppObject{Ptr{U},NP}} = true
 
-# builtin types
+
 # CppRef
 is_convertible(::Type{CppObject{Cchar,N}}, ::Type{CppRef{CppType{Symbol("char"),C}}}) where {N} = true
 is_convertible(::Type{CppObject{Cchar,N}}, ::Type{CppRef{CppType{Symbol("signed char"),C}}}) where {N} = true

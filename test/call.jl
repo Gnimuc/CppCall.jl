@@ -11,8 +11,10 @@ using Test
     x = @cppinit Cint
     @fcall pbv(x)
     @test x[] == 0
+    # const T& -> T
+    x = @cppinit cppty"int"c
     xref = @ref x
-    @test_throws ArgumentError @fcall pbv(xref) # unlike C++, passing reference as value is not allowed
+    @fcall pbv(xref)
 
     @info "invoke `void pbp(int* ptr)`: "
     x = @cppinit Cint
@@ -26,7 +28,7 @@ using Test
     @test x[] == 2
     x = @cppinit cppty"int"c
     px = @ptr x
-    @test_throws ArgumentError GC.@preserve x @fcall pbp(px) # ambiguous call
+    @test_throws ArgumentError GC.@preserve x @fcall pbp(px) # FIXME: should be ambiguous call
 
     @info "invoke `void pbp2c(const int* ptr)`: "
     x = @cppinit cppty"int"c
@@ -129,10 +131,14 @@ end
 
     @test_logs min_level=Logging.Error declare"""#include "overloading.h" """
 
-    # void increment(const int& value);
+    @info "`void increment(const int& value)` vs `void increment(int value)`:"
     x = @cppinit cppty"int"c
-    @fcall increment(x)
+    xref = @ref x
+    @fcall increment(xref::CppRef{cppty"int"c}) # calls `void increment(const int& value)`
     @test x[] == 0
+    @fcall increment(xref::Cint) # calls `void increment(int value)`
+    @test x[] == 0
+    @test_throws ArgumentError @fcall increment(xref) # ambiguous call
 
     # void increment(double value);
     x = @cppinit Cdouble

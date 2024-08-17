@@ -37,7 +37,7 @@ include("types.jl")
 export CppType, CppFunc, CppRef, CppObject
 export CppPtr, CppCPtr, CppVPtr, CppCVPtr
 
-include("typemaps.jl")
+include("typemap.jl")
 export cpptypemap
 
 include("convert.jl")
