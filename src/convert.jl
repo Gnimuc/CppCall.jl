@@ -31,6 +31,28 @@ function is_convertible end
 is_convertible(::Type{S}, ::Type{T}) where {T,S} = false
 is_convertible(::Type{S}, ::Type{T}) where {N,T,S<:CppObject{T,N}} = true
 
+# T -> const T&
+is_convertible(::Type{S}, ::Type{CppRef{CppType{T,C}}}) where {N,T,S<:CppObject{CppType{T,U},N}} = true
+for (cppty, jlty) in BuiltinTypeMap
+    @eval is_convertible(::Type{S}, ::Type{CppRef{CppType{Symbol($cppty),C}}}) where {N,S<:CppObject{$jlty,N}} = true
+end
+
+# T& -> const T&
+is_convertible(::Type{S}, ::Type{CppRef{CppType{T,C}}}) where {N,T,S<:CppObject{CppRef{CppType{T,U}},N}} = true
+for (cppty, jlty) in BuiltinTypeMap
+    @eval is_convertible(::Type{S}, ::Type{CppRef{CppType{Symbol($cppty),C}}}) where {N,S<:CppObject{CppRef{$jlty},N}} = true
+end
+is_convertible(::Type{S}, ::Type{CppRef{CppType{T,C}}}) where {N,NR,T,U<:CppObject{CppType{T,U},N},S<:CppObject{CppRef{U},NR}} = true
+for (cppty, jlty) in BuiltinTypeMap
+    @eval is_convertible(::Type{S}, ::Type{CppRef{CppType{Symbol($cppty),C}}}) where {N,NR,U<:CppObject{$jlty,N},S<:CppObject{CppRef{U},NR}} = true
+end
+
+# const T -> T
+is_convertible(::Type{S}, ::Type{T}) where {N,T,S<:CppObject{CppType{T,C},N}} = true
+for (cppty, jlty) in BuiltinTypeMap
+    @eval is_convertible(::Type{S}, ::Type{$jlty}) where {N,S<:CppObject{CppType{Symbol($cppty),C},N}} = true
+end
+
 # const T& -> T
 is_convertible(::Type{S}, ::Type{T}) where {N,T,S<:CppObject{CppRef{CppType{T,C}},N}} = true
 for (cppty, jlty) in BuiltinTypeMap
@@ -41,10 +63,11 @@ for (cppty, jlty) in BuiltinTypeMap
     @eval is_convertible(::Type{S}, ::Type{$jlty}) where {N,NR,U<:CppObject{CppType{Symbol($cppty),C},N},S<:CppObject{CppRef{U},NR}} = true
 end
 
-# T& -> T
-# is_convertible(::Type{S}, ::Type{T}) where {N,NR,T,U<:CppObject{T,N},S<:CppObject{CppRef{U},NR}} = true
+# T& -> T, const T& -> const T
+is_convertible(::Type{S}, ::Type{T}) where {N,T,S<:CppObject{CppRef{T},N}} = true
+is_convertible(::Type{S}, ::Type{T}) where {N,NR,T,U<:CppObject{T,N},S<:CppObject{CppRef{U},NR}} = true
 
-# CppRef
+# T& -> T&, const T& -> const T&
 is_convertible(::Type{S}, ::Type{CppRef{T}}) where {N,T,S<:CppObject{T,N}} = true
 is_convertible(::Type{S}, ::Type{CppRef{T}}) where {N,NR,T,U<:CppObject{T,N},S<:CppObject{CppRef{U},NR}} = true
 
@@ -57,53 +80,6 @@ is_convertible(::Type{S}, ::Type{CppCPtr{T}}) where {N,NP,T,U<:CppObject{T,N},S<
 is_convertible(::Type{S}, ::Type{Ptr{T}}) where {N,T,S<:CppObject{CppCPtr{T},N}} = true
 is_convertible(::Type{S}, ::Type{Ptr{T}}) where {N,NP,T,U<:CppObject{T,N},S<:CppObject{Ptr{U},NP}} = true
 is_convertible(::Type{S}, ::Type{Ptr{CppType{T,C}}}) where {N,NP,T,U<:CppObject{CppType{T,U},N},S<:CppObject{Ptr{U},NP}} = true
-
-
-# CppRef
-is_convertible(::Type{CppObject{Cchar,N}}, ::Type{CppRef{CppType{Symbol("char"),C}}}) where {N} = true
-is_convertible(::Type{CppObject{Cchar,N}}, ::Type{CppRef{CppType{Symbol("signed char"),C}}}) where {N} = true
-is_convertible(::Type{CppObject{Cuchar,N}}, ::Type{CppRef{CppType{Symbol("unsigned char"),C}}}) where {N} = true
-is_convertible(::Type{CppObject{Cshort,N}}, ::Type{CppRef{CppType{Symbol("short"),C}}}) where {N} = true
-is_convertible(::Type{CppObject{Cushort,N}}, ::Type{CppRef{CppType{Symbol("unsigned short"),C}}}) where {N} = true
-is_convertible(::Type{CppObject{Cint,N}}, ::Type{CppRef{CppType{Symbol("int"),C}}}) where {N} = true
-is_convertible(::Type{CppObject{Cuint,N}}, ::Type{CppRef{CppType{Symbol("unsigned int"),C}}}) where {N} = true
-is_convertible(::Type{CppObject{Clong,N}}, ::Type{CppRef{CppType{Symbol("long"),C}}}) where {N} = true
-is_convertible(::Type{CppObject{Culong,N}}, ::Type{CppRef{CppType{Symbol("unsigned long"),C}}}) where {N} = true
-is_convertible(::Type{CppObject{Clonglong,N}}, ::Type{CppRef{CppType{Symbol("long long"),C}}}) where {N} = true
-is_convertible(::Type{CppObject{Culonglong,N}}, ::Type{CppRef{CppType{Symbol("unsigned long long"),C}}}) where {N} = true
-is_convertible(::Type{CppObject{Cfloat,N}}, ::Type{CppRef{CppType{Symbol("float"),C}}}) where {N} = true
-is_convertible(::Type{CppObject{Cdouble,N}}, ::Type{CppRef{CppType{Symbol("double"),C}}}) where {N} = true
-is_convertible(::Type{CppObject{Bool,N}}, ::Type{CppRef{CppType{Symbol("_Bool"),C}}}) where {N} = true
-
-is_convertible(::Type{CppObject{CppRef{Cchar},NR}}, ::Type{CppRef{CppType{Symbol("char"),C}}}) where {NR} = true
-is_convertible(::Type{CppObject{CppRef{Cchar},NR}}, ::Type{CppRef{CppType{Symbol("signed char"),C}}}) where {NR} = true
-is_convertible(::Type{CppObject{CppRef{Cuchar},NR}}, ::Type{CppRef{CppType{Symbol("unsigned char"),C}}}) where {NR} = true
-is_convertible(::Type{CppObject{CppRef{Cshort},NR}}, ::Type{CppRef{CppType{Symbol("short"),C}}}) where {NR} = true
-is_convertible(::Type{CppObject{CppRef{Cushort},NR}}, ::Type{CppRef{CppType{Symbol("unsigned short"),C}}}) where {NR} = true
-is_convertible(::Type{CppObject{CppRef{Cint},NR}}, ::Type{CppRef{CppType{Symbol("int"),C}}}) where {NR} = true
-is_convertible(::Type{CppObject{CppRef{Cuint},NR}}, ::Type{CppRef{CppType{Symbol("unsigned int"),C}}}) where {NR} = true
-is_convertible(::Type{CppObject{CppRef{Clong},NR}}, ::Type{CppRef{CppType{Symbol("long"),C}}}) where {NR} = true
-is_convertible(::Type{CppObject{CppRef{Culong},NR}}, ::Type{CppRef{CppType{Symbol("unsigned long"),C}}}) where {NR} = true
-is_convertible(::Type{CppObject{CppRef{Clonglong},NR}}, ::Type{CppRef{CppType{Symbol("long long"),C}}}) where {NR} = true
-is_convertible(::Type{CppObject{CppRef{Culonglong},NR}}, ::Type{CppRef{CppType{Symbol("unsigned long long"),C}}}) where {NR} = true
-is_convertible(::Type{CppObject{CppRef{Cfloat},NR}}, ::Type{CppRef{CppType{Symbol("float"),C}}}) where {NR} = true
-is_convertible(::Type{CppObject{CppRef{Cdouble},NR}}, ::Type{CppRef{CppType{Symbol("double"),C}}}) where {NR} = true
-is_convertible(::Type{CppObject{CppRef{Bool},NR}}, ::Type{CppRef{CppType{Symbol("_Bool"),C}}}) where {NR} = true
-
-is_convertible(::Type{CppObject{CppRef{CppObject{Cchar,N}},NR}}, ::Type{CppRef{CppType{Symbol("char"),C}}}) where {N,NR} = true
-is_convertible(::Type{CppObject{CppRef{CppObject{Cchar,N}},NR}}, ::Type{CppRef{CppType{Symbol("signed char"),C}}}) where {N,NR} = true
-is_convertible(::Type{CppObject{CppRef{CppObject{Cuchar,N}},NR}}, ::Type{CppRef{CppType{Symbol("unsigned char"),C}}}) where {N,NR} = true
-is_convertible(::Type{CppObject{CppRef{CppObject{Cshort,N}},NR}}, ::Type{CppRef{CppType{Symbol("short"),C}}}) where {N,NR} = true
-is_convertible(::Type{CppObject{CppRef{CppObject{Cushort,N}},NR}}, ::Type{CppRef{CppType{Symbol("unsigned short"),C}}}) where {N,NR} = true
-is_convertible(::Type{CppObject{CppRef{CppObject{Cint,N}},NR}}, ::Type{CppRef{CppType{Symbol("int"),C}}}) where {N,NR} = true
-is_convertible(::Type{CppObject{CppRef{CppObject{Cuint,N}},NR}}, ::Type{CppRef{CppType{Symbol("unsigned int"),C}}}) where {N,NR} = true
-is_convertible(::Type{CppObject{CppRef{CppObject{Clong,N}},NR}}, ::Type{CppRef{CppType{Symbol("long"),C}}}) where {N,NR} = true
-is_convertible(::Type{CppObject{CppRef{CppObject{Culong,N}},NR}}, ::Type{CppRef{CppType{Symbol("unsigned long"),C}}}) where {N,NR} = true
-is_convertible(::Type{CppObject{CppRef{CppObject{Clonglong,N}},NR}}, ::Type{CppRef{CppType{Symbol("long long"),C}}}) where {N,NR} = true
-is_convertible(::Type{CppObject{CppRef{CppObject{Culonglong,N}},NR}}, ::Type{CppRef{CppType{Symbol("unsigned long long"),C}}}) where {N,NR} = true
-is_convertible(::Type{CppObject{CppRef{CppObject{Cfloat,N}},NR}}, ::Type{CppRef{CppType{Symbol("float"),C}}}) where {N,NR} = true
-is_convertible(::Type{CppObject{CppRef{CppObject{Cdouble,N}},NR}}, ::Type{CppRef{CppType{Symbol("double"),C}}}) where {N,NR} = true
-is_convertible(::Type{CppObject{CppRef{CppObject{Bool,N}},NR}}, ::Type{CppRef{CppType{Symbol("_Bool"),C}}}) where {N,NR} = true
 
 # Ptr
 is_convertible(::Type{CppObject{Ptr{CppObject{Cchar,N}},NP}}, ::Type{Ptr{CppType{Symbol("char"),C}}}) where {N,NP} = true

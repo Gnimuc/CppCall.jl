@@ -133,6 +133,26 @@ end
 
     @info "`void increment(const int& value)` vs `void increment(int value)`:"
     x = @cppinit cppty"int"c
+    @fcall increment(x::Cint) # calls `void increment(int value)`
+    @test x[] == 0
+    @fcall increment(x::CppRef{cppty"int"c}) # calls `void increment(const int& value)`
+    @test x[] == 0
+    @test_throws ArgumentError @fcall increment(x) # ambiguous call
+
+    xref = @ref x
+    @fcall increment(xref::CppRef{cppty"int"c}) # calls `void increment(const int& value)`
+    @test x[] == 0
+    @fcall increment(xref::Cint) # calls `void increment(int value)`
+    @test x[] == 0
+    @test_throws ArgumentError @fcall increment(xref) # ambiguous call
+
+    x = @cppinit cppty"int"
+    @fcall increment(x::CppRef{cppty"int"c}) # calls `void increment(const int& value)`
+    @test x[] == 0
+    @fcall increment(x::Cint) # calls `void increment(int value)`
+    @test x[] == 0
+    @test_throws ArgumentError @fcall increment(x) # ambiguous call
+
     xref = @ref x
     @fcall increment(xref::CppRef{cppty"int"c}) # calls `void increment(const int& value)`
     @test x[] == 0
