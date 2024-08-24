@@ -12,7 +12,7 @@ using Test
     @fcall pbv(x)
     @test x[] == 0
     # const T& -> T
-    x = @cppinit cppty"int"c
+    x = @cppinit cpp"int"c
     xref = @ref x
     @fcall pbv(xref)
 
@@ -21,21 +21,21 @@ using Test
     px = @ptr x
     GC.@preserve x @fcall pbp(px)
     @test x[] == 1
-    x = @cppinit cppty"int"
+    x = @cppinit cpp"int"
     x[] = 1
     px = @ptr x
     GC.@preserve x @fcall pbp(px)
     @test x[] == 2
-    x = @cppinit cppty"int"c
+    x = @cppinit cpp"int"c
     px = @ptr x
     @test_throws ArgumentError GC.@preserve x @fcall pbp(px) # FIXME: should be ambiguous call
 
     @info "invoke `void pbp2c(const int* ptr)`: "
-    x = @cppinit cppty"int"c
+    x = @cppinit cpp"int"c
     px = @ptr x
     GC.@preserve x @fcall pbp2c(px)
     @test x[] == 0
-    x = @cppinit cppty"int"
+    x = @cppinit cpp"int"
     px = @ptr x
     GC.@preserve x @fcall pbp2c(px) # this is ok
     @test x[] == 0
@@ -48,21 +48,21 @@ using Test
     cpx = @cptr x
     GC.@preserve x @fcall pbcp(cpx)
     @test x[] == 2
-    x = @cppinit cppty"int"c
+    x = @cppinit cpp"int"c
     px = @ptr x
     @test_throws ArgumentError GC.@preserve x @fcall pbcp(px) # no permissive
-    x = @cppinit cppty"int"
+    x = @cppinit cpp"int"
     x[] = 2
     px = @ptr x
     GC.@preserve x @fcall pbcp(px)
     @test x[] == 3
 
     @info "invoke `void pbcp2c(const int* const ptr)`: "
-    x = @cppinit cppty"int"c
+    x = @cppinit cpp"int"c
     px = @ptr x
     GC.@preserve x @fcall pbcp2c(px)
     @test x[] == 0
-    x = @cppinit cppty"int"
+    x = @cppinit cpp"int"
     px = @ptr x
     GC.@preserve x @fcall pbcp2c(px)
     @test x[] == 0
@@ -78,13 +78,13 @@ using Test
     xref = @ref x
     @fcall pblvr(xref)
     @test x[] == 2
-    x = @cppinit cppty"int"c
+    x = @cppinit cpp"int"c
     @test_throws ArgumentError @fcall pblvr(x) # should not discard const-qualifier
     xref = @ref x
     @test_throws ArgumentError @fcall pblvr(xref) # should not discard const-qualifier
 
     @info "invoke `void pbclvr(const int& ref)`: "
-    x = @cppinit cppty"int"c
+    x = @cppinit cpp"int"c
     x[] = 1 # FIXME: this should not be allowed
     @fcall pbclvr(x)
     @test x[] == 1
@@ -92,7 +92,7 @@ using Test
     xref[] = 2 # FIXME: this should not be allowed
     @fcall pbclvr(xref)
     @test x[] == 2
-    x = @cppinit cppty"int"
+    x = @cppinit cpp"int"
     x[] = 1
     @fcall pbclvr(x)
     @test x[] == 1
@@ -132,29 +132,29 @@ end
     @test_logs min_level=Logging.Error declare"""#include "overloading.h" """
 
     @info "`void increment(const int& value)` vs `void increment(int value)`:"
-    x = @cppinit cppty"int"c
+    x = @cppinit cpp"int"c
     @fcall increment(x::Cint) # calls `void increment(int value)`
     @test x[] == 0
-    @fcall increment(x::CppRef{cppty"int"c}) # calls `void increment(const int& value)`
+    @fcall increment(x::CppRef{cpp"int"c}) # calls `void increment(const int& value)`
     @test x[] == 0
     @test_throws ArgumentError @fcall increment(x) # ambiguous call
 
     xref = @ref x
-    @fcall increment(xref::CppRef{cppty"int"c}) # calls `void increment(const int& value)`
+    @fcall increment(xref::CppRef{cpp"int"c}) # calls `void increment(const int& value)`
     @test x[] == 0
     @fcall increment(xref::Cint) # calls `void increment(int value)`
     @test x[] == 0
     @test_throws ArgumentError @fcall increment(xref) # ambiguous call
 
-    x = @cppinit cppty"int"
-    @fcall increment(x::CppRef{cppty"int"c}) # calls `void increment(const int& value)`
+    x = @cppinit cpp"int"
+    @fcall increment(x::CppRef{cpp"int"c}) # calls `void increment(const int& value)`
     @test x[] == 0
     @fcall increment(x::Cint) # calls `void increment(int value)`
     @test x[] == 0
     @test_throws ArgumentError @fcall increment(x) # ambiguous call
 
     xref = @ref x
-    @fcall increment(xref::CppRef{cppty"int"c}) # calls `void increment(const int& value)`
+    @fcall increment(xref::CppRef{cpp"int"c}) # calls `void increment(const int& value)`
     @test x[] == 0
     @fcall increment(xref::Cint) # calls `void increment(int value)`
     @test x[] == 0

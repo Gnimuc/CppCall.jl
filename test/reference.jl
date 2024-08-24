@@ -2,7 +2,7 @@ using CppCall
 using Test
 
 @testset "Reference" begin
-    x = @cppinit cppty"int"c
+    x = @cppinit cpp"int"c
     @test x[] == 0
     x[] = 1
     @test x[] == 1
@@ -22,7 +22,7 @@ end
 
 @testset "Reference | finalizer" begin
     xref = let
-        x = @cppinit cppty"int"c
+        x = @cppinit cpp"int"c
         x[] = 1
         @ref x
     end

@@ -3,7 +3,7 @@ using Test
 
 @testset "CppObject" begin
     @testset "Builtins" begin
-        x = @cppinit cppty"char"
+        x = @cppinit cpp"char"
         @test x[] === Cchar(0)
         x[] = 1
         @test x[] === Cchar(1)
@@ -13,7 +13,7 @@ using Test
         @test x[] === Cchar(3)
         @test_throws InexactError x[] = 4.1
 
-        x = @cppinit cppty"unsigned char"
+        x = @cppinit cpp"unsigned char"
         @test x[] === Cuchar(0)
         x[] = 1
         @test x[] === Cuchar(1)
@@ -23,7 +23,7 @@ using Test
         @test x[] === Cuchar(3)
         @test_throws InexactError x[] = -1
 
-        x = @cppinit cppty"int"
+        x = @cppinit cpp"int"
         @test x[] === Cint(0)
         x[] = 1
         @test x[] === Cint(1)
@@ -33,7 +33,7 @@ using Test
         @test x[] === Cint(3)
         @test_throws InexactError x[] = 4.1
 
-        x = @cppinit cppty"unsigned"
+        x = @cppinit cpp"unsigned"
         @test x[] === Cuint(0)
         x[] = 1
         @test x[] === Cuint(1)
@@ -43,7 +43,7 @@ using Test
         @test x[] === Cuint(3)
         @test_throws InexactError x[] = -1
 
-        x = @cppinit cppty"unsigned int"
+        x = @cppinit cpp"unsigned int"
         @test x[] === Cuint(0)
         x[] = 1
         @test x[] === Cuint(1)
@@ -53,7 +53,7 @@ using Test
         @test x[] === Cuint(3)
         @test_throws InexactError x[] = -1
 
-        x = @cppinit cppty"long"
+        x = @cppinit cpp"long"
         @test x[] === Clong(0)
         x[] = 1
         @test x[] === Clong(1)
@@ -63,7 +63,7 @@ using Test
         @test x[] === Clong(3)
         @test_throws InexactError x[] = 4.1
 
-        x = @cppinit cppty"unsigned long"
+        x = @cppinit cpp"unsigned long"
         @test x[] === Culong(0)
         x[] = 1
         @test x[] === Culong(1)
@@ -73,7 +73,7 @@ using Test
         @test x[] === Culong(3)
         @test_throws InexactError x[] = -1
 
-        x = @cppinit cppty"long long"
+        x = @cppinit cpp"long long"
         @test x[] === Clonglong(0)
         x[] = 1
         @test x[] === Clonglong(1)
@@ -83,7 +83,7 @@ using Test
         @test x[] === Clonglong(3)
         @test_throws InexactError x[] = 4.1
 
-        x = @cppinit cppty"unsigned long long"
+        x = @cppinit cpp"unsigned long long"
         @test x[] === Culonglong(0)
         x[] = 1
         @test x[] === Culonglong(1)
@@ -93,7 +93,7 @@ using Test
         @test x[] === Culonglong(3)
         @test_throws InexactError x[] = -1
 
-        x = @cppinit cppty"float"
+        x = @cppinit cpp"float"
         @test x[] === Float32(0.0f0)
         x[] = 1.0f0
         @test x[] === Float32(1.0f0)
@@ -102,7 +102,7 @@ using Test
         x[] = 0x03
         @test x[] === Float32(3.0f0)
 
-        x = @cppinit cppty"double"
+        x = @cppinit cpp"double"
         @test x[] === Float64(0.0)
         x[] = 1.0
         @test x[] === Float64(1.0)
@@ -111,7 +111,7 @@ using Test
         x[] = 0x03
         @test x[] === Float64(3.0)
 
-        x = @cppinit cppty"bool"
+        x = @cppinit cpp"bool"
         @test x[] === false
         x[] = true
         @test x[] === true
@@ -123,99 +123,99 @@ using Test
     end
 
     @testset "Qualified Builtins" begin
-        x = @cppinit cppty"char"c
+        x = @cppinit cpp"char"c
         @test x[] === Cchar(0)
-        x = @cppinit cppty"char"v
+        x = @cppinit cpp"char"v
         @test x[] === Cchar(0)
-        x = @cppinit cppty"char"cv
+        x = @cppinit cpp"char"cv
         @test x[] === Cchar(0)
 
-        x = @cppinit cppty"unsigned char"c
+        x = @cppinit cpp"unsigned char"c
         @test x[] === Cuchar(0)
-        x = @cppinit cppty"unsigned char"v
+        x = @cppinit cpp"unsigned char"v
         @test x[] === Cuchar(0)
-        x = @cppinit cppty"unsigned char"cv
+        x = @cppinit cpp"unsigned char"cv
         @test x[] === Cuchar(0)
 
-        x = @cppinit cppty"int"
+        x = @cppinit cpp"int"
         @test x[] === Cint(0)
-        x = @cppinit cppty"int"c
+        x = @cppinit cpp"int"c
         @test x[] === Cint(0)
-        x = @cppinit cppty"int"v
+        x = @cppinit cpp"int"v
         @test x[] === Cint(0)
-        x = @cppinit cppty"int"cv
+        x = @cppinit cpp"int"cv
 
-        x = @cppinit cppty"unsigned"
+        x = @cppinit cpp"unsigned"
         @test x[] === Cuint(0)
-        x = @cppinit cppty"unsigned"c
+        x = @cppinit cpp"unsigned"c
         @test x[] === Cuint(0)
-        x = @cppinit cppty"unsigned"v
+        x = @cppinit cpp"unsigned"v
         @test x[] === Cuint(0)
-        x = @cppinit cppty"unsigned"cv
+        x = @cppinit cpp"unsigned"cv
 
-        x = @cppinit cppty"unsigned int"
+        x = @cppinit cpp"unsigned int"
         @test x[] === Cuint(0)
-        x = @cppinit cppty"unsigned int"c
+        x = @cppinit cpp"unsigned int"c
         @test x[] === Cuint(0)
-        x = @cppinit cppty"unsigned int"v
+        x = @cppinit cpp"unsigned int"v
         @test x[] === Cuint(0)
-        x = @cppinit cppty"unsigned int"cv
+        x = @cppinit cpp"unsigned int"cv
 
-        x = @cppinit cppty"long"
+        x = @cppinit cpp"long"
         @test x[] === Clong(0)
-        x = @cppinit cppty"long"c
+        x = @cppinit cpp"long"c
         @test x[] === Clong(0)
-        x = @cppinit cppty"long"v
+        x = @cppinit cpp"long"v
         @test x[] === Clong(0)
-        x = @cppinit cppty"long"cv
+        x = @cppinit cpp"long"cv
 
-        x = @cppinit cppty"unsigned long"
+        x = @cppinit cpp"unsigned long"
         @test x[] === Culong(0)
-        x = @cppinit cppty"unsigned long"c
+        x = @cppinit cpp"unsigned long"c
         @test x[] === Culong(0)
-        x = @cppinit cppty"unsigned long"v
+        x = @cppinit cpp"unsigned long"v
         @test x[] === Culong(0)
-        x = @cppinit cppty"unsigned long"cv
+        x = @cppinit cpp"unsigned long"cv
 
-        x = @cppinit cppty"long long"
+        x = @cppinit cpp"long long"
         @test x[] === Clonglong(0)
-        x = @cppinit cppty"long long"c
+        x = @cppinit cpp"long long"c
         @test x[] === Clonglong(0)
-        x = @cppinit cppty"long long"v
+        x = @cppinit cpp"long long"v
         @test x[] === Clonglong(0)
-        x = @cppinit cppty"long long"cv
+        x = @cppinit cpp"long long"cv
 
-        x = @cppinit cppty"unsigned long long"
+        x = @cppinit cpp"unsigned long long"
         @test x[] === Culonglong(0)
-        x = @cppinit cppty"unsigned long long"c
+        x = @cppinit cpp"unsigned long long"c
         @test x[] === Culonglong(0)
-        x = @cppinit cppty"unsigned long long"v
+        x = @cppinit cpp"unsigned long long"v
         @test x[] === Culonglong(0)
-        x = @cppinit cppty"unsigned long long"cv
+        x = @cppinit cpp"unsigned long long"cv
 
-        x = @cppinit cppty"float"
+        x = @cppinit cpp"float"
         @test x[] === Float32(0.0f0)
-        x = @cppinit cppty"float"c
+        x = @cppinit cpp"float"c
         @test x[] === Float32(0.0f0)
-        x = @cppinit cppty"float"v
+        x = @cppinit cpp"float"v
         @test x[] === Float32(0.0f0)
-        x = @cppinit cppty"float"cv
+        x = @cppinit cpp"float"cv
 
-        x = @cppinit cppty"double"
+        x = @cppinit cpp"double"
         @test x[] === Float64(0.0)
-        x = @cppinit cppty"double"c
+        x = @cppinit cpp"double"c
         @test x[] === Float64(0.0)
-        x = @cppinit cppty"double"v
+        x = @cppinit cpp"double"v
         @test x[] === Float64(0.0)
-        x = @cppinit cppty"double"cv
+        x = @cppinit cpp"double"cv
 
-        x = @cppinit cppty"bool"
+        x = @cppinit cpp"bool"
         @test x[] === false
-        x = @cppinit cppty"bool"c
+        x = @cppinit cpp"bool"c
         @test x[] === false
-        x = @cppinit cppty"bool"v
+        x = @cppinit cpp"bool"v
         @test x[] === false
-        x = @cppinit cppty"bool"cv
+        x = @cppinit cpp"bool"cv
         @test x[] === false
     end
 end

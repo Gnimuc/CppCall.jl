@@ -44,7 +44,7 @@ include("convert.jl")
 
 include("macros.jl")
 export @declare_str, @include
-export @cppty_str, @qualty_str
+export @cpp_str, @qualty
 export @cppinit, @cppnew
 export @ptr, @cptr, @vptr, @cvptr, @ref
 

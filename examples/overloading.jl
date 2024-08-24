@@ -4,13 +4,13 @@ using CppCall
 
 declare"""#include "overloading.h" """
 
-x = @cppinit cppty"int"
+x = @cppinit cpp"int"
 
 @time @fcall increment(x)
 
 @time @fcall increment(x)
 
-y = @cppinit cppty"double"
+y = @cppinit cpp"double"
 
 @time @fcall increment(y)
 

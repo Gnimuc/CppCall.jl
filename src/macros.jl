@@ -114,7 +114,13 @@ macro cppnew(cppty, args...)
                end)
 end
 
-macro cppty_str(name::AbstractString, flags...)
+
+"""
+    @cpp_str -> CppType
+
+Construct a `CppType` with optional qualifiers marked by the flags `c`, `v`, `cv`.
+"""
+macro cpp_str(name::AbstractString, flags...)
     qualifier = :(CppCall.U)
     if !isempty(flags)
         flag = first(flags)
