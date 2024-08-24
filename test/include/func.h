@@ -8,6 +8,10 @@ void pbv(int value) {
     std::cout << "Value (by value): " << value << std::endl;
 }
 
+void pbcv(const int value) {
+    std::cout << "Value (by const value): " << value << std::endl;
+}
+
 void pbp(int* ptr) {
     if (ptr) {
         (*ptr)++;

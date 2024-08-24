@@ -16,6 +16,17 @@ using Test
     xref = @ref x
     @fcall pbv(xref)
 
+    @info "invoke `void pbcv(const int value)`"
+    x = @cppinit Cint
+    @fcall pbcv(x)
+    @test x[] == 0
+    xref = @ref x
+    @fcall pbcv(xref)
+    x = @cppinit cpp"int"c
+    @fcall pbcv(x)
+    xref = @ref x
+    @fcall pbcv(xref)
+
     @info "invoke `void pbp(int* ptr)`: "
     x = @cppinit Cint
     px = @ptr x
@@ -28,7 +39,7 @@ using Test
     @test x[] == 2
     x = @cppinit cpp"int"c
     px = @ptr x
-    @test_throws ArgumentError GC.@preserve x @fcall pbp(px) # FIXME: should be ambiguous call
+    @test_throws ArgumentError GC.@preserve x @fcall pbp(px) # invalid conversion from 'const int*' to 'int*'
 
     @info "invoke `void pbp2c(const int* ptr)`: "
     x = @cppinit cpp"int"c
@@ -37,7 +48,7 @@ using Test
     @test x[] == 0
     x = @cppinit cpp"int"
     px = @ptr x
-    GC.@preserve x @fcall pbp2c(px) # this is ok
+    GC.@preserve x @fcall pbp2c(px)
     @test x[] == 0
 
     @info "invoke `void pbcp(int* const ptr)`: "
@@ -50,7 +61,7 @@ using Test
     @test x[] == 2
     x = @cppinit cpp"int"c
     px = @ptr x
-    @test_throws ArgumentError GC.@preserve x @fcall pbcp(px) # no permissive
+    @test_throws ArgumentError GC.@preserve x @fcall pbcp(px) # invalid conversion from 'const int*' to 'int*'
     x = @cppinit cpp"int"
     x[] = 2
     px = @ptr x
@@ -79,9 +90,9 @@ using Test
     @fcall pblvr(xref)
     @test x[] == 2
     x = @cppinit cpp"int"c
-    @test_throws ArgumentError @fcall pblvr(x) # should not discard const-qualifier
+    @test_throws ArgumentError @fcall pblvr(x) # binding reference of type 'int&' to 'const int' discards qualifiers
     xref = @ref x
-    @test_throws ArgumentError @fcall pblvr(xref) # should not discard const-qualifier
+    @test_throws ArgumentError @fcall pblvr(xref) # binding reference of type 'int&' to 'const int' discards qualifiers
 
     @info "invoke `void pbclvr(const int& ref)`: "
     x = @cppinit cpp"int"c
