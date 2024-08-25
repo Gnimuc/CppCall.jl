@@ -36,6 +36,18 @@ macro __INSTANCE__()
 end
 
 """
+    @undo(i)
+Undo the last `i`-steps of the `CppInterpreter` instance corresponding to the `__module__` it's being invoked.
+"""
+macro undo(i)
+    @gensym CC_INSTANCE
+    return esc(quote
+                   local $CC_INSTANCE = CppCall.get_instance($__module__)
+                   CppCall.undo($CC_INSTANCE.interpreter, $i)
+               end)
+end
+
+"""
     @cppinit cppty
 Create a C++ object of type `cppty` with zero initialized values.
 """

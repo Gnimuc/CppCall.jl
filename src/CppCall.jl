@@ -19,7 +19,7 @@ import ClangCompiler as CC
 using CppInterOp
 using CppInterOp: JLLEnvs
 using CppInterOp: create_interpreter, dispose
-using CppInterOp: addIncludePath, getptr
+using CppInterOp: addIncludePath, getptr, undo
 using CppInterOp: CXScope
 using CppInterOp: invoke
 using CppInterOp: getFunctionSignature

@@ -25,14 +25,14 @@ function cppconvert end
 # | Variable Types |                         Argument Types                                |
 # |                | T | const T| T& | const T& | T* | const T* | T* const | const T* const|
 # |----------------|---|--------|----|----------|----|----------|----------|---------------|
-# | T              | ⭕️|   ⭕   | ⭕ |    ⭕️   | ❌ |    ❌    |    ❌    |      ❌       |
-# | const T        | ⭕️|   ⭕   | ❌ |    ⭕   | ❌ |    ❌    |    ❌    |      ❌       |
-# | T&             | ⭕️|   ⭕   | ⭕ |    ⭕️   | ❌ |    ❌    |    ❌    |      ❌       |
-# | const T&       | ⭕️|   ⭕   | ❌ |    ⭕   | ❌ |    ❌    |    ❌    |      ❌       |
-# | T*             | ❌|   ❌   | ❌ |    ❌   | ⭕ |    ⭕    |    ⭕    |      ⭕       |
-# | const T*       | ❌|   ❌   | ❌ |    ❌   | ❌ |    ⭕    |    ❌    |      ⭕       |
-# | T* const       | ❌|   ❌   | ❌ |    ❌   | ⭕ |    ⭕    |    ⭕    |      ⭕       |
-# | const T* const | ❌|   ❌   | ❌ |    ❌   | ❌ |    ⭕    |    ❌    |      ⭕       |
+# | T              | ⭕️|   ⭕  | ⭕ |    ⭕️   | ❌ |    ❌    |    ❌    |      ❌       |
+# | const T        | ⭕️|   ⭕  | ❌ |    ⭕   | ❌ |    ❌    |    ❌    |      ❌       |
+# | T&             | ⭕️|   ⭕  | ⭕ |    ⭕️   | ❌ |    ❌    |    ❌    |      ❌       |
+# | const T&       | ⭕️|   ⭕  | ❌ |    ⭕   | ❌ |    ❌    |    ❌    |      ❌       |
+# | T*             | ❌|   ❌  | ❌ |    ❌   | ⭕ |    ⭕    |    ⭕    |      ⭕       |
+# | const T*       | ❌|   ❌  | ❌ |    ❌   | ❌ |    ⭕    |    ❌    |      ⭕       |
+# | T* const       | ❌|   ❌  | ❌ |    ❌   | ⭕ |    ⭕    |    ⭕    |      ⭕       |
+# | const T* const | ❌|   ❌  | ❌ |    ❌   | ❌ |    ⭕    |    ❌    |      ⭕       |
 
 """
     is_convertible(from, to)
@@ -118,7 +118,18 @@ end
 # T* -> T*, const T* -> const T*
 is_convertible(::Type{S}, ::Type{Ptr{T}}) where {N,T,S<:CppObject{Ptr{T},N}} = true
 is_convertible(::Type{S}, ::Type{Ptr{T}}) where {N,NR,T,V<:CppObject{T,N},S<:CppObject{Ptr{V},NR}} = true
+is_convertible(::Type{S}, ::Type{Ptr{T}}) where {N,NR,T,X,V<:CppObject{X,N},S<:CppObject{Ptr{V},NR}} = is_convertible(CppObject{unwrap_ptr_ty(S),NR}, Ptr{T})
 
 # T* const -> T*, const T* const -> const T*
 is_convertible(::Type{S}, ::Type{Ptr{T}}) where {N,T,S<:CppObject{CppCPtr{T},N}} = true
 is_convertible(::Type{S}, ::Type{Ptr{T}}) where {N,NR,T,V<:CppObject{T,N},S<:CppObject{CppCPtr{V},NR}} = true
+is_convertible(::Type{S}, ::Type{Ptr{T}}) where {N,NR,T,X,V<:CppObject{X,N},S<:CppObject{CppCPtr{V},NR}} = is_convertible(CppObject{unwrap_ptr_ty(S),NR}, Ptr{T})
+
+# helper functions
+unwrap_ptr_ty(::Type{CppObject{T,N}}) where {N,T} = T
+unwrap_ptr_ty(::Type{CppObject{Ptr{T},N}}) where {N,T} = Ptr{unwrap_ptr_ty(T)}
+unwrap_ptr_ty(::Type{CppObject{CppCPtr{T},N}}) where {N,T} = CppCPtr{unwrap_ptr_ty(T)}
+unwrap_ptr_ty(::Type{CppObject{Ptr{T},N}}) where {N,NN,TT,T<:CppObject{Ptr{TT},NN}} = Ptr{unwrap_ptr_ty(T)}
+unwrap_ptr_ty(::Type{CppObject{Ptr{T},N}}) where {N,NN,TT,T<:CppObject{CppCPtr{TT},NN}} = Ptr{unwrap_ptr_ty(T)}
+unwrap_ptr_ty(::Type{CppObject{CppCPtr{T},N}}) where {N,NN,TT,T<:CppObject{Ptr{TT},NN}} = CppCPtr{unwrap_ptr_ty(T)}
+unwrap_ptr_ty(::Type{CppObject{CppCPtr{T},N}}) where {N,NN,TT,T<:CppObject{CppCPtr{TT},NN}} = CppCPtr{unwrap_ptr_ty(T)}

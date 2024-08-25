@@ -7,7 +7,7 @@ using Test
 
     @test_logs min_level=Logging.Error declare"""#include "func.h" """
 
-    @info "invoke `void pbv(int value)`"
+    @info "invoke `void pbv(int value)`: "
     x = @cppinit Cint
     @fcall pbv(x)
     @test x[] == 0
@@ -16,7 +16,7 @@ using Test
     xref = @ref x
     @fcall pbv(xref)
 
-    @info "invoke `void pbcv(const int value)`"
+    @info "invoke `void pbcv(const int value)`: "
     x = @cppinit Cint
     @fcall pbcv(x)
     @test x[] == 0
