@@ -148,6 +148,8 @@ function Base.setindex!(obj::CppObject{T,N}, x) where {T,N}
     return x
 end
 
+Base.setindex!(obj::CppObject{CppType{T,C},N}, x) where {T,N} = error("assignment of read-only variable $obj")
+
 unsafe_pointer(x::CppObject) = Base.unsafe_convert(Ptr{Cvoid}, x)
 unsafe_pointer(x::CppObject{CppRef{CppObject{T,N}},NR}) where {T,N,NR} = reinterpret(Ptr{T}, x.data)
 unsafe_pointer(x::CppObject{CppRef{T},N}) where {T,N} = reinterpret(Ptr{T}, x.data)
@@ -227,10 +229,10 @@ function CppObject{CppRef}(x::CppObject{T,N}) where {T,N}
     return GC.@preserve x CppObject{CppRef{CppObject{T,N}},S}(reinterpret(NTuple{S,UInt8}, pointer_from_objref(x)))
 end
 
-# there is no reference to reference in C++
+# there is no reference to reference in C++, it's equivalent to make a binding to the original object
 CppObject{CppRef}(x::CppObject{CppRef{T},N}) where {T,N} = x
 
-Base.getindex(x::CppObject{CppRef{T},N}) where {T,N} = error("C++ references cannot be dereferenced.")
+Base.getindex(x::CppObject{CppRef{T},N}) where {T,N} = error("failed to dereference the C++ reference $x.")
 
 function Base.getindex(x::CppObject{CppRef{CppObject{T,N}},NR}) where {T,N,NR}
     ptr = reinterpret(Ptr{NTuple{N,UInt8}}, x.data)
@@ -243,6 +245,8 @@ function Base.setindex!(obj::CppObject{CppRef{CppObject{T,N}}}, x) where {T,N}
     unsafe_store!(ptr, reinterpret(NTuple{N,UInt8}, convert(cpptypemap(T), x)))
     return x
 end
+
+Base.setindex!(obj::CppObject{CppRef{CppObject{CppType{T,C},N}}}, x) where {T,N} = error("assignment of read-only reference $obj")
 
 # builtin types
 function CppObject{T}(x::S) where {T<:BuiltinTypes,S}

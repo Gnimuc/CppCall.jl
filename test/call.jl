@@ -96,13 +96,11 @@ using Test
 
     @info "invoke `void pbclvr(const int& ref)`: "
     x = @cppinit cpp"int"c
-    x[] = 1 # FIXME: this should not be allowed
     @fcall pbclvr(x)
-    @test x[] == 1
+    @test x[] == 0
     xref = @ref x
-    xref[] = 2 # FIXME: this should not be allowed
     @fcall pbclvr(xref)
-    @test x[] == 2
+    @test x[] == 0
     x = @cppinit cpp"int"
     x[] = 1
     @fcall pbclvr(x)
