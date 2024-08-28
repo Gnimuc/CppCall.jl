@@ -42,5 +42,6 @@ get_func_decls(x::CppInterpreter) = get_decls(x.lookup_func)
 
 get_compiler_instance(x::CppInterpreter) = CC.get_instance(x.bridge)
 get_ast_context(x::CppInterpreter) = CC.get_ast_context(x.bridge)
+get_sema(x::CppInterpreter) = CC.get_sema(x.bridge)
 
 cppinclude(x::CppInterpreter, path::AbstractString) = CppInterOp.addIncludePath(x.interpreter, path)

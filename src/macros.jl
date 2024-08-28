@@ -113,16 +113,18 @@ macro ref(obj)
 end
 
 """
-    @cppnew cppty [args...]
-Create a C++ object of type `cppty` with the given initialization values.
+    @cppnew cppty
+Allocate a C++ object that is of type `cppty`.
 """
-macro cppnew(cppty, args...)
-    @gensym CC_INSTANCE CC_CLTY CC_JLTY
+macro cppnew(cppty)
+    @gensym CC_INSTANCE CC_TY CC_JLTY CC_PTR CC_N
     return esc(quote
                    local $CC_INSTANCE = CppCall.get_instance($__module__)
-                   local $CC_CLTY = CppCall.to_cpp($cppty, $CC_INSTANCE)
-                   local $CC_JLTY = CppCall.to_jl($CC_CLTY)
-                   CppObject{$CC_JLTY}($(args...))
+                   local $CC_JLTY = CppCall.to_jl(CppCall.to_cpp($cppty, $CC_INSTANCE))
+                   local $CC_TY = CppCall.lookup_cppty($CC_INSTANCE, $cppty)
+                   local $CC_PTR = CppCall.construct($CC_TY)
+                   local $CC_N = Core.sizeof(Int)
+                   CppObject{Ptr{$CC_JLTY},$CC_N}(reinterpret(NTuple{$CC_N,UInt8}, $CC_PTR))
                end)
 end
 

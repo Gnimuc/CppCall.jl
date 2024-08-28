@@ -5,7 +5,8 @@ using ClangCompiler: AbstractClangType, AbstractType, AbstractBuiltinType, Abstr
 using ClangCompiler: QualType, RecordType, EnumType, ElaboratedType, TypedefType
 using ClangCompiler: PointerType, LValueReferenceType, RValueReferenceType
 using ClangCompiler: FunctionNoProtoType, FunctionProtoType
-using ClangCompiler: TypeDecl, NamedDecl
+using ClangCompiler: CXXConstructorDecl, CXXDestructorDecl, CXXMethodDecl
+using ClangCompiler: TypeDecl, RecordDecl, NamedDecl, CXXRecordDecl
 using ClangCompiler: get_type_ptr, get_qual_type, get_decl_type, get_pointee_type, desugar
 using ClangCompiler: get_return_type, get_params, get_param_num, get_param_type, get_integer_type
 using ClangCompiler: get_pointer_type
@@ -21,7 +22,7 @@ using CppInterOp: JLLEnvs
 using CppInterOp: create_interpreter, dispose
 using CppInterOp: addIncludePath, getptr, undo
 using CppInterOp: CXScope
-using CppInterOp: invoke
+using CppInterOp: invoke, construct
 using CppInterOp: getFunctionSignature
 
 include("interpreter.jl")
@@ -66,6 +67,6 @@ function __init__()
 end
 
 include("call.jl")
-export @fcall
+export @fcall, @ctor
 
 end # module

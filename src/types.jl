@@ -259,6 +259,9 @@ function CppObject{T}(x::S) where {T,S}
     CppObject{T,N}(reinterpret(NTuple{N,UInt8}, x))
 end
 
+# lookup
+lookup_cppty(I::CppInterpreter, ::Type{CppType{S,Q}}) where {S,Q} = make_scope(lookup(I, string(S)), I)
+
 # type mapping
 """
     to_cpp(::Type{T}, I::CppInterpreter) -> QualType

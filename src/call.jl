@@ -72,14 +72,54 @@ struct CppIdentifier{S} end
     end
 end
 
+# @ctor cppty()
+# @ctor nns::cppty()
+macro ctor(expr)
+    type_name = nns(expr)
+    call_expr = expr
+    while !Meta.isexpr(call_expr, :call)
+        call_expr = call_expr.args[end]
+        call_expr isa Symbol && break
+    end
+    if !Meta.isexpr(call_expr, :call)
+        throw(ArgumentError("@ctor has to take a function call"))
+    end
+
+    args = map(x -> Meta.isexpr(x, :(::)) ? x.args[1] : x, call_expr.args[2:end])
+
+    @gensym CC_ID CC_CTX CC_TY
+    return esc(quote
+                   local $CC_ID = CppCall.get_instance_id($__module__)
+                   local $CC_CTX = CppCall.CppContext{$CC_ID}()
+                   local $CC_TY = CppCall.CppIdentifier{Symbol($type_name)}()
+                   CppCall.cppctorcall($CC_CTX, $CC_TY, $(args...))
+               end)
+end
+
+@generated function cppctorcall(::CppContext{ID}, ::CppIdentifier{S}, params...) where {ID,S}
+    I = CPPCALL_INSTANCES[ID]
+    candidates = lookup(I, string(S), FuncOverloadingLookup())
+    record = dispatch(I, candidates, params)
+    isnothing(record) && throw(ArgumentError("no default constructor for `$S`"))
+    ctor = CC.LookupDefaultConstructor(get_sema(I), CXXRecordDecl(record.ptr))
+    scope = make_scope(ctor, I)
+    retty = to_jl(to_cpp(record, I))
+    return quote
+        Base.@_inline_meta
+        ret = CppObject{Ptr{$retty},Core.sizeof(Int)}()
+        cppinvoke($scope, C_NULL, ret, params...)
+        return ret
+    end
+end
+
 function dispatch(I::CppInterpreter, candidates::Vector{NamedDecl}, params)
     func = nothing
     for x in candidates
         ty = clty_to_jlty(get_type_ptr(to_cpp(x, I)))
-        dispatch(ty, params) || continue
+        dispatch(I, ty, params) || continue
         if !isnothing(func)
-            CC.dump(x)
-            CC.dump(func)
+            # CC.dump(x)
+            # CC.dump(func)
             throw(ArgumentError("call of overloaded `$(err_signature(func, params))` is ambiguous."))
         end
         func = x
@@ -89,13 +129,14 @@ end
 
 _unwrap(::Type{Type{T}}) where {T} = T
 
-@inline function dispatch(func::FunctionProtoType, params)
+
+@inline function dispatch(I::CppInterpreter, func::FunctionProtoType, params)
     argnum = length(params) ÷ 2
     get_param_num(func) != argnum && return false
     for i = 1:argnum
         argty = params[i]
         annotty = params[i + argnum]
-        @assert argty <: CppObject "argument types should be `CppObject`, got a $argty"
+        @assert argty <: CppObject "argument types should be of type `CppObject`, got a $argty"
         fromty = argty
         clty = get_param_type(func, i)
         toty = to_jl(clty)
@@ -104,6 +145,8 @@ _unwrap(::Type{Type{T}}) where {T} = T
     end
     return true
 end
+
+@inline dispatch(I::CppInterpreter, x::RecordType, params) = true # constructor or destructor
 
 @inline function cppinvoke(x::CXScope, self::Ptr{Cvoid}, result::Union{CppObject,Ptr}, params...)
     ret_ptr = unsafe_pointer_rt(result)

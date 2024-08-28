@@ -218,4 +218,19 @@ using Test
         x = @cppinit cpp"bool"cv
         @test x[] === false
     end
+
+    @testset "@cppnew" begin
+        @include "./include"
+
+        declare"""#include "class.h" """
+
+        struct Foo
+            x::Cint
+        end
+
+        px = @cppnew cpp"Foo"
+        p = reinterpret(Ptr{Foo}, px.data)
+        foo = unsafe_load(p)
+        @test foo.x == 42
+    end
 end
