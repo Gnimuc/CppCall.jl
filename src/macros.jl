@@ -47,18 +47,22 @@ macro undo(i)
                end)
 end
 
+function cppinit(::Type{T}, I::CppInterpreter=@__INSTANCE__) where {T<:Union{BuiltinTypes,CppType{S,Q}}} where {S,Q}
+    clty = to_cpp(T, I)
+    jlty = to_jl(clty)
+    sz = size_of(get_ast_context(I), clty)
+    return CppObject{jlty,sz}()
+end
+
 """
     @cppinit cppty
 Create a C++ object of type `cppty` with zero initialized values.
 """
 macro cppinit(cppty)
-    @gensym CC_INSTANCE CC_CLTY CC_JLTY CC_SIZE
+    @gensym CC_INSTANCE
     return esc(quote
                    local $CC_INSTANCE = CppCall.get_instance($__module__)
-                   local $CC_CLTY = CppCall.to_cpp($cppty, $CC_INSTANCE)
-                   local $CC_JLTY = CppCall.to_jl($CC_CLTY)
-                   local $CC_SIZE = CppCall.size_of(CppCall.get_ast_context($CC_INSTANCE), $CC_CLTY)
-                   CppObject{$CC_JLTY,$CC_SIZE}()
+                   CppCall.cppinit($cppty, $CC_INSTANCE)
                end)
 end
 
@@ -100,34 +104,58 @@ Create a C++ object that represents a reference to `obj`.
 """
 macro ref(obj)
     @gensym CC_VAR CC_X
-    return esc(
-        quote
-            $CC_VAR = CppObject{CppRef}($obj)
-            finalizer($CC_VAR) do $CC_X
-                CppCall.gcuse($obj)
-                $CC_X
-            end
-            $CC_VAR
-        end
-    )
+    return esc(quote
+                   $CC_VAR = CppObject{CppRef}($obj)
+                   finalizer($CC_VAR) do $CC_X
+                       CppCall.gcuse($obj)
+                       $CC_X
+                   end
+                   $CC_VAR
+               end)
+end
+
+_get_scope(::Type{CppType{S,Q}}, I::CppInterpreter=@__INSTANCE__) where {S,Q} = make_scope(lookup(I, string(S)), I)
+
+function cppnew(::Type{T}, I::CppInterpreter=@__INSTANCE__) where {T<:CppType{S,Q}} where {S,Q}
+    s = string(S)
+    haskey(DEFAULT_TYPE_MAPPING, s) && return cppnew(DEFAULT_TYPE_MAPPING[s], I)
+    jlty = to_jl(to_cpp(T, I))
+    ptr = construct(_get_scope(T, I))
+    N = Core.sizeof(Int)
+    return CppObject{Ptr{jlty},N}(reinterpret(NTuple{N,UInt8}, ptr))
+end
+
+function cppnew(::Type{T}, I::CppInterpreter=@__INSTANCE__) where {T<:BuiltinTypes}
+    clty = to_cpp(T, I)
+    jlty = to_jl(clty)
+    sz = size_of(get_ast_context(I), clty)
+    ptr = allocate(sz)
+    N = Core.sizeof(Int)
+    return CppObject{Ptr{jlty},N}(reinterpret(NTuple{N,UInt8}, ptr))
 end
 
 """
     @cppnew cppty
-Allocate a C++ object that is of type `cppty`.
+Allocate a C++ object that is of type `cppty` and return a pointer `CppObject`.
 """
 macro cppnew(cppty)
-    @gensym CC_INSTANCE CC_TY CC_JLTY CC_PTR CC_N
+    @gensym CC_INSTANCE
     return esc(quote
                    local $CC_INSTANCE = CppCall.get_instance($__module__)
-                   local $CC_JLTY = CppCall.to_jl(CppCall.to_cpp($cppty, $CC_INSTANCE))
-                   local $CC_TY = CppCall.lookup_cppty($CC_INSTANCE, $cppty)
-                   local $CC_PTR = CppCall.construct($CC_TY)
-                   local $CC_N = Core.sizeof(Int)
-                   CppObject{Ptr{$CC_JLTY},$CC_N}(reinterpret(NTuple{$CC_N,UInt8}, $CC_PTR))
+                   CppCall.cppnew($cppty, $CC_INSTANCE)
                end)
 end
 
+
+cppdelete(x::CppObject{Ptr{T},N}) where {T,N} = deallocate(convert(Ptr{Cvoid}, x))
+
+"""
+    @cppdelete obj
+Deallocate/destruct the `obj` which is allocated by `@cppnew`.
+"""
+macro cppdelete(obj)
+    return esc(:(CppCall.cppdelete($obj)))
+end
 
 """
     @cpp_str -> CppType

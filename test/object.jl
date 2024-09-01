@@ -229,8 +229,45 @@ using Test
         end
 
         px = @cppnew cpp"Foo"
-        p = reinterpret(Ptr{Foo}, px.data)
+        p = convert(Ptr{Foo}, px)
         foo = unsafe_load(p)
         @test foo.x == 42
+        @cppdelete px
+
+        px = @cppnew cpp"Foo"c
+        p = convert(Ptr{Foo}, px)
+        foo = unsafe_load(p)
+        @test foo.x == 42
+        @cppdelete px
+
+        px = @cppnew Cint
+        @test px[] != C_NULL
+        @test unsafe_load(px[]) == 0
+        @cppdelete px
+
+        px = @cppnew cpp"int"
+        @test px[] != C_NULL
+        @test unsafe_load(px[]) == 0
+        @cppdelete px
+
+        px = @cppnew cpp"unsigned int"
+        @test px[] != C_NULL
+        @test unsafe_load(px[]) == 0
+        @cppdelete px
+
+        px = @cppnew cpp"long"
+        @test px[] != C_NULL
+        @test unsafe_load(px[]) == 0
+        @cppdelete px
+
+        px = @cppnew cpp"int"c
+        @test px[] != C_NULL
+        @test unsafe_load(px[]) == 0
+        @cppdelete px
+
+        px = @cppnew cpp"int"v
+        @test px[] != C_NULL
+        @test unsafe_load(px[]) == 0
+        @cppdelete px
     end
 end

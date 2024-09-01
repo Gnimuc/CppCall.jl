@@ -22,7 +22,7 @@ using CppInterOp: JLLEnvs
 using CppInterOp: create_interpreter, dispose
 using CppInterOp: addIncludePath, getptr, undo
 using CppInterOp: CXScope
-using CppInterOp: invoke, construct
+using CppInterOp: invoke, construct, destruct, allocate, deallocate
 using CppInterOp: getFunctionSignature
 
 include("interpreter.jl")
@@ -46,7 +46,7 @@ include("convert.jl")
 include("macros.jl")
 export @declare_str, @include
 export @cpp_str, @qualty
-export @cppinit, @cppnew
+export @cppinit, @cppnew, @cppdelete
 export @ptr, @cptr, @vptr, @cvptr, @ref
 
 include("registry.jl")

@@ -168,7 +168,6 @@ CppObject{CppRef{T}}() where {T} = CppObject{CppRef{T},Core.sizeof(Int)}()
 CppObject{Ptr{T}}() where {T} = CppObject{Ptr{T},Core.sizeof(Int)}()
 # CppObject{T}() where {T<:BuiltinTypes} = CppObject{T,Core.sizeof(T)}()
 
-
 # pointers
 # with the current design it's a bit tricky to make a difference between:
 # - CppObject{Ptr{CppType{T}}} -> represents a heap-allocated pointer
@@ -258,9 +257,6 @@ function CppObject{T}(x::S) where {T,S}
     N = Core.sizeof(S)
     CppObject{T,N}(reinterpret(NTuple{N,UInt8}, x))
 end
-
-# lookup
-lookup_cppty(I::CppInterpreter, ::Type{CppType{S,Q}}) where {S,Q} = make_scope(lookup(I, string(S)), I)
 
 # type mapping
 """
