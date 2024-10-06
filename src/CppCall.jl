@@ -67,6 +67,6 @@ function __init__()
 end
 
 include("call.jl")
-export @fcall, @ctor
+export @fcall, @mcall, @ctor
 
 end # module

@@ -174,3 +174,27 @@ end
     @fcall increment(x)
     @test x[] == 0.0
 end
+
+@testset "Method Call" begin
+    @include "./include"
+
+    @test_logs min_level=Logging.Error declare"""#include "class.h" """
+
+    x = @ctor Foo()
+    y = @mcall x.get()
+    @test y[] == 42
+
+    z = @cppinit Cint
+    z[] = 1
+    @mcall x.set(z)
+    y = @mcall x->get()
+    @test y[] == 1
+
+    x1 = @cppnew cpp"Foo"
+    z1 = @cppinit Cint
+    z1[] = 2
+    @mcall x->set(z1)
+    y1 = @mcall x->get()
+    @test y1[] == 2
+    @cppdelete x1
+end

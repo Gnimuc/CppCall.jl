@@ -6,6 +6,8 @@
 class Foo {
 public:
     Foo() : x(42) {}
+    int get() const { return x; }
+    void set(int v) { x = v; }
 private:
     int x;
 };

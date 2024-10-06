@@ -112,6 +112,79 @@ end
     end
 end
 
+# @mcall obj.foo(a, b)
+# @mcall obj.foo(a::T, b::S)
+# @mcall ptr->foo(a, b)
+# @mcall ptr->foo(a::T, b::S)
+macro mcall(expr)
+    local obj_sym, call_expr, func_name
+    if Meta.isexpr(expr, :->)
+        obj_sym, block_expr = expr.args
+        call_expr = last(block_expr.args)
+        func_name = string(call_expr.args[1])
+    elseif Meta.isexpr(expr, :call) && Meta.isexpr(first(expr.args), :.)
+        obj_sym, node = first(expr.args).args
+        call_expr = expr
+        func_name = string(node.value)
+    else
+        throw(ArgumentError("@mcall has to take a function call"))
+    end
+
+    args = map(x -> Meta.isexpr(x, :(::)) ? x.args[1] : x, call_expr.args[2:end])
+    annots = map(x -> Meta.isexpr(x, :(::)) ? x.args[2] : :nothing, call_expr.args[2:end])
+
+    @gensym CC_ID CC_CTX CC_METHOD
+    return esc(quote
+                   local $CC_ID = CppCall.get_instance_id($__module__)
+                   local $CC_CTX = CppCall.CppContext{$CC_ID}()
+                   local $CC_METHOD = CppCall.CppIdentifier{Symbol($func_name)}()
+                   CppCall.cppmtcall($CC_CTX, $CC_METHOD, $obj_sym, $(args...), $(annots...))
+               end)
+end
+
+#! format: off
+get_class(::Type{T}) where {T} = error("invalid object type: $T, expected a `CppObject` that represents a C++ object or a pointer to a C++ object")
+get_class(::Type{T}) where {S,Q,T<:CppType{S,Q}} = S
+get_class(::Type{S}) where {N,T<:CppType,S<:CppObject{T,N}} = get_class(T)
+get_class(::Type{S}) where {N,T<:CppType,S<:CppObject{Ptr{T},N}} = get_class(T)
+get_class(::Type{S}) where {N,T<:CppType,S<:CppObject{CppCPtr{T},N}} = get_class(T)
+get_class(::Type{S}) where {N,NR,T,V<:CppObject{T,N},S<:CppObject{Ptr{V},NR}} = get_class(T)
+get_class(::Type{S}) where {N,NR,T,V<:CppObject{T,N},S<:CppObject{CppCPtr{V},NR}} = get_class(T)
+#! format: on
+
+@generated function cppmtcall(::CppContext{ID}, ::CppIdentifier{S}, obj::T, params...) where {ID,S,T}
+    I = CPPCALL_INSTANCES[ID]
+    n = string(get_class(T)) * "::" * string(S)
+    candidates = lookup(I, n, FuncOverloadingLookup())
+    func = dispatch(I, candidates, params)
+    isnothing(func) &&
+        throw(ArgumentError("no matching function for call to `$(err_signature(first(candidates), params))`"))
+    scope = make_scope(func, I)
+    clty = get_return_type(clty_to_jlty(get_type_ptr(to_cpp(func, I)))) # TODO: cache func lookup results
+    retty = to_jl(clty)
+    if retty == Cvoid
+        return quote
+            Base.@_inline_meta
+            cppinvoke($scope, obj, C_NULL, params...)
+        end
+    elseif retty <: CppRef
+        return quote
+            Base.@_inline_meta
+            ret = CppObject{$retty}()
+            cppinvoke($scope, obj, ret, params...)
+            return ret
+        end
+    else
+        sz = size_of(get_ast_context(I), clty)
+        return quote
+            Base.@_inline_meta
+            ret = CppObject{$retty,$sz}()
+            cppinvoke($scope, obj, ret, params...)
+            return ret
+        end
+    end
+end
+
 function dispatch(I::CppInterpreter, candidates::Vector{NamedDecl}, params)
     func = nothing
     for x in candidates
@@ -152,4 +225,18 @@ end
     ret_ptr = unsafe_pointer_rt(result)
     arg_ptrs = [unsafe_pointer(params[i]) for i = 1:(length(params) ÷ 2)]
     return GC.@preserve result params invoke(x, ret_ptr, arg_ptrs, self)
+end
+
+@inline function cppinvoke(x::CXScope, self::S, result::Union{CppObject,Ptr}, params...) where {N,T<:CppType,S<:CppObject{T,N}}
+    ret_ptr = unsafe_pointer_rt(result)
+    arg_ptrs = [unsafe_pointer(params[i]) for i = 1:(length(params) ÷ 2)]
+    self_ptr = unsafe_pointer(self)
+    return GC.@preserve self result params invoke(x, ret_ptr, arg_ptrs, self_ptr)
+end
+
+@inline function cppinvoke(x::CXScope, self::S, result::Union{CppObject,Ptr}, params...) where {N,T,S<:CppObject{Ptr{T},N}}
+    ret_ptr = unsafe_pointer_rt(result)
+    arg_ptrs = [unsafe_pointer(params[i]) for i = 1:(length(params) ÷ 2)]
+    self_ptr = reinterpret(Ptr{Cvoid}, self.data)
+    return GC.@preserve self result params invoke(x, ret_ptr, arg_ptrs, self_ptr)
 end
