@@ -85,6 +85,8 @@ A templated type where `T` is the [`CppType`](@ref) to be templated and
 """
 struct CppTemplate{T<:CppType{S} where {S},TARGS} <: AbstractCppType end
 
+CppTemplate(ty, targs...) = CppTemplate{ty, Tuple{targs...}}
+
 """
 	struct CppEnum{S,T} <: AbstractCppType
 Represent a C/C++ Enum.

@@ -37,6 +37,7 @@ export LookupKind, TypeLookup, FuncLookup, FuncOverloadingLookup, lookup
 include("types.jl")
 export CppType, CppFunc, CppRef, CppObject
 export CppPtr, CppCPtr, CppVPtr, CppCVPtr
+export CppTemplate
 
 include("typemap.jl")
 export cpptypemap
@@ -47,7 +48,7 @@ include("macros.jl")
 export @declare_str, @include
 export @cpp_str, @qualty
 export @cppinit, @cppnew, @cppdelete
-export @ptr, @cptr, @vptr, @cvptr, @ref
+export @ptr, @cptr, @vptr, @cvptr, @ref, @template
 
 include("registry.jl")
 export register, get_instance, get_instance_id

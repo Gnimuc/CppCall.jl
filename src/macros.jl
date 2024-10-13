@@ -67,6 +67,30 @@ macro cppinit(cppty)
 end
 
 """
+    @template cppty{T1, T2, ..., TN} where {T1, T2, ..., TN} -> CppTemplate{cppty, Tuple{T1, T2, ..., TN}}
+Construct a `CppTemplate` with template arguments T1, T2, ..., TN.
+"""
+macro template(expr)
+    root_expr = expr
+    curly_expr = root_expr
+    while Meta.isexpr(curly_expr, :where)
+        curly_expr = first(curly_expr.args)
+        Meta.isexpr(curly_expr, :curly) && break
+        root_expr = curly_expr
+    end
+    if !Meta.isexpr(curly_expr, :curly)
+        throw(ArgumentError("@template has to take a curly-brace expression"))
+    end
+
+    call_expr = Expr(:call, :CppTemplate, curly_expr.args...)
+
+    Meta.isexpr(root_expr, :curly) && return call_expr
+
+    root_expr.args[1] = call_expr
+    return expr
+end
+
+"""
     @ptr obj
 Create a C++ object that represents a `Unqualified`-pointer to `obj`.
 """
