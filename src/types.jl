@@ -85,7 +85,10 @@ A templated type where `T` is the [`CppType`](@ref) to be templated and
 """
 struct CppTemplate{T<:CppType{S} where {S},TARGS} <: AbstractCppType end
 
-CppTemplate(ty, targs...) = CppTemplate{ty, Tuple{targs...}}
+get_rt(::Type{CppTemplate{T,TARGS}}) where {T<:CppType{S} where {S},TARGS} = T
+get_argst(::Type{CppTemplate{T,TARGS}}) where {T<:CppType{S} where {S},TARGS} = TARGS
+
+CppTemplate(ty, targs...) = CppTemplate{ty,Tuple{targs...}}
 
 """
 	struct CppEnum{S,T} <: AbstractCppType
@@ -293,11 +296,13 @@ function to_cpp(::Type{CppType{S,Q}}, I::CppInterpreter) where {S,Q}
     return qty
 end
 
-function to_cpp(::Type{CppTemplate{S,TARGS}}, I::CppInterpreter) where {S,TARGS}
-    lookup_type(I, string(S)) || error("failed to find the type: $S")
-    decl = get_type_decl(I)
-    CC.dump(decl)
-    return get_decl_type(get_ast_context(I), decl)
+TemplateArgInfo(x::QualType) = CXTemplateArgInfo(x.ptr)
+
+function to_cpp(::Type{CppTemplate{T,TARGS}}, I::CppInterpreter) where {S,Q,T<:CppType{S,Q},TARGS}
+    template_decl = lookup(I, string(S)) # ClassTemplateDecl
+    args = [TemplateArgInfo(to_cpp(t, I)) for t in TARGS.types]
+    scope = instantiateTemplate(make_scope(template_decl, I), args)
+    return get_decl_type(get_ast_context(I), ClassTemplateSpecializationDecl(scope.data))
 end
 
 function to_cpp(::Type{CppEnum{S}}, I::CppInterpreter) where {S}

@@ -6,7 +6,7 @@ using ClangCompiler: QualType, RecordType, EnumType, ElaboratedType, TypedefType
 using ClangCompiler: PointerType, LValueReferenceType, RValueReferenceType
 using ClangCompiler: FunctionNoProtoType, FunctionProtoType
 using ClangCompiler: CXXConstructorDecl, CXXDestructorDecl, CXXMethodDecl
-using ClangCompiler: TypeDecl, RecordDecl, NamedDecl, CXXRecordDecl
+using ClangCompiler: TypeDecl, RecordDecl, NamedDecl, CXXRecordDecl, ClassTemplateSpecializationDecl
 using ClangCompiler: get_type_ptr, get_qual_type, get_decl_type, get_pointee_type, desugar
 using ClangCompiler: get_return_type, get_params, get_param_num, get_param_type, get_integer_type
 using ClangCompiler: get_pointer_type
@@ -23,7 +23,7 @@ using CppInterOp: create_interpreter, dispose
 using CppInterOp: addIncludePath, getptr, undo
 using CppInterOp: CXScope
 using CppInterOp: invoke, construct, destruct, allocate, deallocate
-using CppInterOp: getFunctionSignature
+using CppInterOp: getFunctionSignature, CXTemplateArgInfo, instantiateTemplate
 
 include("interpreter.jl")
 export initialize, is_valid, terminate
