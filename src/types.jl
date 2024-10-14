@@ -250,7 +250,9 @@ function Base.setindex!(obj::CppObject{CppRef{CppObject{T,N}}}, x) where {T,N}
     return x
 end
 
-Base.setindex!(obj::CppObject{CppRef{CppObject{CppType{T,C},N}}}, x) where {T,N} = error("assignment of read-only reference $obj")
+function Base.setindex!(obj::CppObject{CppRef{CppObject{CppType{T,C},N}}}, x) where {T,N}
+    error("assignment of read-only reference $obj")
+end
 
 # builtin types
 function CppObject{T}(x::S) where {T<:BuiltinTypes,S}
@@ -319,10 +321,17 @@ function get_qualifier(ty::QualType)
     return Unqualified
 end
 
+# FIXME: using PrintingPolicy
 function get_name(x::AbstractType)
     n = CC.get_name(get_qual_type(x))
     i = findfirst(' ', n)
     return i == nothing ? n : n[(i + 1):end]
+end
+
+function get_template_id(x::AbstractType)
+    n = get_name(x)
+    i = findfirst('<', n)
+    return i == nothing ? n : n[1:(i - 1)]
 end
 
 """
@@ -380,9 +389,29 @@ function to_jl(x::EnumType, q::Qualifier=Unqualified)
 end
 
 function to_jl(x::AbstractRecordType, q::Qualifier=Unqualified)
-    n = get_name(x)
-    sym = isempty(n) ? gensym() : Symbol(n)
-    return CppType{sym,q}
+    ctsd = ClassTemplateSpecializationDecl(getDecl(x))
+    if ctsd.ptr == C_NULL
+        n = get_name(x)
+        sym = isempty(n) ? gensym() : Symbol(n)
+        return CppType{sym,q}
+    end
+    args = getTemplateArgs(ctsd)
+    targs = []
+    for n = 0:(size(args) - 1)
+        arg = get(args, n)
+        k = getKind(arg)
+        if k == CXTemplateArgument_Type
+            qty = getAsType(arg)
+            push!(targs, to_jl(qty))
+            # elseif k == CXTemplateArgument_Integral
+            #    @show getAsIntegral(arg)
+        else
+            push!(targs, nothing)
+        end
+    end
+    id = get_template_id(x)
+    sym = isempty(id) ? gensym() : Symbol(id)
+    return CppTemplate{CppType{sym,q},Tuple{targs...}}
 end
 
 to_jl(x::ElaboratedType, ::Qualifier) = to_jl(x)

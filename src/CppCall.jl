@@ -7,6 +7,8 @@ using ClangCompiler: PointerType, LValueReferenceType, RValueReferenceType
 using ClangCompiler: FunctionNoProtoType, FunctionProtoType
 using ClangCompiler: CXXConstructorDecl, CXXDestructorDecl, CXXMethodDecl
 using ClangCompiler: TypeDecl, RecordDecl, NamedDecl, CXXRecordDecl, ClassTemplateSpecializationDecl
+using ClangCompiler: getDecl, getTemplateArgs, getKind, getAsType
+using ClangCompiler: TemplateArgument, CXTemplateArgument_Type, CXTemplateArgument_Integral
 using ClangCompiler: get_type_ptr, get_qual_type, get_decl_type, get_pointee_type, desugar
 using ClangCompiler: get_return_type, get_params, get_param_num, get_param_type, get_integer_type
 using ClangCompiler: get_pointer_type
