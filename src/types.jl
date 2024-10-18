@@ -328,7 +328,7 @@ function get_name(x::AbstractType)
     return i == nothing ? n : n[(i + 1):end]
 end
 
-function get_template_id(x::AbstractType)
+function get_template_name(x::AbstractType)
     n = get_name(x)
     i = findfirst('<', n)
     return i == nothing ? n : n[1:(i - 1)]
@@ -406,13 +406,33 @@ function to_jl(x::AbstractRecordType, q::Qualifier=Unqualified)
             # elseif k == CXTemplateArgument_Integral
             #    @show getAsIntegral(arg)
         else
-            push!(targs, nothing)
+            # push!(targs, nothing)
         end
     end
-    id = get_template_id(x)
-    sym = isempty(id) ? gensym() : Symbol(id)
+    n = get_template_name(x)
+    sym = isempty(n) ? gensym() : Symbol(n)
     return CppTemplate{CppType{sym,q},Tuple{targs...}}
 end
+
+function to_jl(x::TemplateSpecializationType, q::Qualifier=Unqualified)
+    args = get_template_args(x)
+    targs = []
+    for arg in args
+        k = getKind(arg)
+        if k == CXTemplateArgument_Type
+            qty = getAsType(arg)
+            push!(targs, to_jl(qty))
+            # elseif k == CXTemplateArgument_Integral
+            #    @show getAsIntegral(arg)
+        else
+            # push!(targs, nothing)
+        end
+    end
+    n = get_template_name(x)
+    sym = isempty(n) ? gensym() : Symbol(n)
+    return CppTemplate{CppType{sym,q},Tuple{targs...}}
+end
+
 
 to_jl(x::ElaboratedType, ::Qualifier) = to_jl(x)
 to_jl(x::ElaboratedType) = to_jl(desugar(x))
