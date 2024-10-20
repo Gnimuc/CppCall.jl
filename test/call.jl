@@ -110,10 +110,9 @@ using Test
     @fcall pbclvr(xref)
     @test x[] == 2
 
-    @info "invoke `void pbrvr(int&& ref)`: " # FIXME: this should not be allowed
+    @info "invoke `void pbrvr(int&& ref)`: "
     x = @cppinit Cint
-    @fcall pbrvr(x)
-    @test x[] == 1
+    @test_throws ArgumentError @fcall pbrvr(x) # cannot bind rvalue reference of type 'int&&' to lvalue of type 'int'
 
     @info "invoke `int rbv(void)`: "
     x = @fcall rbv()

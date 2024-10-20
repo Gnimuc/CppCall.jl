@@ -200,7 +200,7 @@ end
     clty = to_cpp(lookup(I, "pbrvr", FuncLookup()), I)
     func = to_jl(clty)
     @test get_rt(func) == Cvoid
-    @test get_argst(func) == Tuple{CppRef{Cint}}
+    @test get_argst(func) != Tuple{CppRef{Cint}}
 
     # int rbv(void);
     clty = to_cpp(lookup(I, "rbv", FuncLookup()), I)

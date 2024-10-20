@@ -127,6 +127,9 @@ struct CppRef{T} <: AbstractCppType end
 
 unwrap_type(::Type{CppRef{T}}) where {T} = T
 
+# only for type checking
+struct CppRvalueRef{T} <: AbstractCppType end
+
 """
     mutable struct CppObject{T,N} <: Any
 Represent a C++ object in Julia.
@@ -447,7 +450,7 @@ end
 to_jl(x::LValueReferenceType, ::Qualifier) = to_jl(x)
 to_jl(x::LValueReferenceType) = CppRef{to_jl(get_pointee_type(x))}
 to_jl(x::RValueReferenceType, ::Qualifier) = to_jl(x)
-to_jl(x::RValueReferenceType) = CppRef{to_jl(get_pointee_type(x))}
+to_jl(x::RValueReferenceType) = CppRvalueRef{to_jl(get_pointee_type(x))}
 
 to_jl(x::FunctionNoProtoType, ::Qualifier) = to_jl(x)
 to_jl(x::FunctionNoProtoType) = CppFuncType{to_jl(get_return_type(x))}
