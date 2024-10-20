@@ -50,3 +50,21 @@ end
     jlty2 = to_jl(clty2)
     @test jlty2 == @template cpp"std::basic_string"{Cuchar, @template(cpp"std::char_traits"{Cuchar}), @template cpp"std::allocator"{Cuchar}}
 end
+
+@testset "CppTemplate | Method Call" begin
+    @test_logs min_level=Logging.Error declare"""#include <vector> """
+
+    const StdVector{T} = @template cpp"std::vector"{T} where T
+    px = @cppnew StdVector{cpp"int"}
+    sz = @mcall px->size()
+    @test sz[] == 0
+
+    v = @cppinit cpp"int"
+    v[] = 1
+    @mcall px->push_back(v)
+
+    sz = @mcall px->size()
+    @test sz[] == 1
+
+    @cppdelete px
+end

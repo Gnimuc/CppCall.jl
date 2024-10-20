@@ -144,17 +144,43 @@ end
 
 #! format: off
 get_class(::Type{T}) where {T} = error("invalid object type: $T, expected a `CppObject` that represents a C++ object or a pointer to a C++ object")
-get_class(::Type{T}) where {S,Q,T<:CppType{S,Q}} = S
+get_class(::Type{T}) where {S,Q,T<:CppType{S,Q}} = string(S)
 get_class(::Type{S}) where {N,T<:CppType,S<:CppObject{T,N}} = get_class(T)
 get_class(::Type{S}) where {N,T<:CppType,S<:CppObject{Ptr{T},N}} = get_class(T)
 get_class(::Type{S}) where {N,T<:CppType,S<:CppObject{CppCPtr{T},N}} = get_class(T)
 get_class(::Type{S}) where {N,NR,T,V<:CppObject{T,N},S<:CppObject{Ptr{V},NR}} = get_class(T)
 get_class(::Type{S}) where {N,NR,T,V<:CppObject{T,N},S<:CppObject{CppCPtr{V},NR}} = get_class(T)
+
+get_class(::Type{Cvoid}) = "void"
+get_class(::Type{Cchar}) = "char"
+get_class(::Type{Cuchar}) = "unsigned char"
+get_class(::Type{Cshort}) = "short"
+get_class(::Type{Cushort}) = "unsigned short"
+get_class(::Type{Cint}) = "int"
+get_class(::Type{Cuint}) = "unsigned int"
+get_class(::Type{Clong}) = "long"
+get_class(::Type{Culong}) = "unsigned long"
+if Clonglong !== Clong
+    get_class(::Type{Clonglong}) = "long long"
+    get_class(::Type{Culonglong}) = "unsigned long long"
+end
+get_class(::Type{Cfloat}) = "float"
+get_class(::Type{Cdouble}) = "double"
+get_class(::Type{Bool}) = "_Bool"
+
+function get_class(::Type{CppTemplate{T,Targs}}) where {S,Q,T<:CppType{S,Q},Targs}
+    return string(S) * "<" * join(map(x -> get_class(x), Targs.types), ",") * ">"
+end
+get_class(::Type{S}) where {N,T<:CppTemplate,S<:CppObject{T,N}} = get_class(T)
+get_class(::Type{S}) where {N,T<:CppTemplate,S<:CppObject{Ptr{T},N}} = get_class(T)
+get_class(::Type{S}) where {N,T<:CppTemplate,S<:CppObject{CppCPtr{T},N}} = get_class(T)
+# get_class(::Type{S}) where {N,NR,T<:CppTemplate,V<:CppObject{T,N},S<:CppObject{Ptr{V},NR}} = get_class(T)
+# get_class(::Type{S}) where {N,NR,T<:CppTemplate,V<:CppObject{T,N},S<:CppObject{CppCPtr{V},NR}} = get_class(T)
 #! format: on
 
 @generated function cppmtcall(::CppContext{ID}, ::CppIdentifier{S}, obj::T, params...) where {ID,S,T}
     I = CPPCALL_INSTANCES[ID]
-    n = string(get_class(T)) * "::" * string(S)
+    n = get_class(T) * "::" * string(S)
     candidates = lookup(I, n, FuncOverloadingLookup())
     func = dispatch(I, candidates, params)
     isnothing(func) &&
@@ -202,7 +228,6 @@ end
 
 _unwrap(::Type{Type{T}}) where {T} = T
 
-
 @inline function dispatch(I::CppInterpreter, func::FunctionProtoType, params)
     argnum = length(params) ÷ 2
     get_param_num(func) != argnum && return false
@@ -227,14 +252,16 @@ end
     return GC.@preserve result params invoke(x, ret_ptr, arg_ptrs, self)
 end
 
-@inline function cppinvoke(x::CXScope, self::S, result::Union{CppObject,Ptr}, params...) where {N,T<:CppType,S<:CppObject{T,N}}
+@inline function cppinvoke(x::CXScope, self::S, result::Union{CppObject,Ptr},
+                           params...) where {N,T<:CppType,S<:CppObject{T,N}}
     ret_ptr = unsafe_pointer_rt(result)
     arg_ptrs = [unsafe_pointer(params[i]) for i = 1:(length(params) ÷ 2)]
     self_ptr = unsafe_pointer(self)
     return GC.@preserve self result params invoke(x, ret_ptr, arg_ptrs, self_ptr)
 end
 
-@inline function cppinvoke(x::CXScope, self::S, result::Union{CppObject,Ptr}, params...) where {N,T,S<:CppObject{Ptr{T},N}}
+@inline function cppinvoke(x::CXScope, self::S, result::Union{CppObject,Ptr},
+                           params...) where {N,T,S<:CppObject{Ptr{T},N}}
     ret_ptr = unsafe_pointer_rt(result)
     arg_ptrs = [unsafe_pointer(params[i]) for i = 1:(length(params) ÷ 2)]
     self_ptr = reinterpret(Ptr{Cvoid}, self.data)

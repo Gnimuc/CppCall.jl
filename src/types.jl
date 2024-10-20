@@ -57,6 +57,9 @@ Represent a (possibly-)cv-qualified C++ type in Julia.
 """
 struct CppType{S,Q} <: AbstractCppType end
 
+get_s(::Type{CppType{S,Q}}) where {S,Q} = S
+get_q(::Type{CppType{S,Q}}) where {S,Q} = Q
+
 """
     CppType(x::AbstractString, q::Qualifier=Unqualified)
 Create a C++ type with the given name and qualifier. The qualifier is `Unqualified` by default.
@@ -85,8 +88,9 @@ A templated type where `T` is the [`CppType`](@ref) to be templated and
 """
 struct CppTemplate{T<:CppType{S} where {S},TARGS} <: AbstractCppType end
 
-get_rt(::Type{CppTemplate{T,TARGS}}) where {T<:CppType{S} where {S},TARGS} = T
-get_argst(::Type{CppTemplate{T,TARGS}}) where {T<:CppType{S} where {S},TARGS} = TARGS
+get_t(::Type{CppTemplate{T,TARGS}}) where {T<:CppType{S} where {S},TARGS} = T
+get_s(::Type{CppTemplate{T,TARGS}}) where {T<:CppType{S} where {S},TARGS} = S
+get_targs(::Type{CppTemplate{T,TARGS}}) where {T<:CppType{S} where {S},TARGS} = TARGS
 
 CppTemplate(ty, targs...) = CppTemplate{ty,Tuple{targs...}}
 
@@ -303,11 +307,19 @@ end
 
 TemplateArgInfo(x::QualType) = CXTemplateArgInfo(x.ptr)
 
-function to_cpp(::Type{CppTemplate{T,TARGS}}, I::CppInterpreter) where {S,Q,T<:CppType{S,Q},TARGS}
+function instantiate(::Type{CppTemplate{T,TARGS}}, I::CppInterpreter) where {S,Q,T<:CppType{S,Q},TARGS}
     template_decl = lookup(I, string(S)) # ClassTemplateDecl
     args = [TemplateArgInfo(to_cpp(t, I)) for t in TARGS.types]
     scope = instantiateTemplate(make_scope(template_decl, I), args)
-    return get_decl_type(get_ast_context(I), ClassTemplateSpecializationDecl(scope.data))
+    return scope
+end
+
+to_cpp(x::ClassTemplateSpecializationDecl, I::CppInterpreter) = get_decl_type(get_ast_context(I), x)
+
+function to_cpp(::Type{T}, I::CppInterpreter) where {T<:CppTemplate}
+    scope = instantiate(T, I)
+    ctsd = ClassTemplateSpecializationDecl(scope.data)
+    return get_decl_type(get_ast_context(I), ctsd)
 end
 
 function to_cpp(::Type{CppEnum{S}}, I::CppInterpreter) where {S}
@@ -436,12 +448,14 @@ function to_jl(x::TemplateSpecializationType, q::Qualifier=Unqualified)
     return CppTemplate{CppType{sym,q},Tuple{targs...}}
 end
 
-
 to_jl(x::ElaboratedType, ::Qualifier) = to_jl(x)
 to_jl(x::ElaboratedType) = to_jl(desugar(x))
 
 to_jl(x::TypedefType, ::Qualifier) = to_jl(x)
 to_jl(x::TypedefType) = to_jl(desugar(x))
+
+to_jl(x::SubstTemplateTypeParmType, ::Qualifier) = to_jl(x)
+to_jl(x::SubstTemplateTypeParmType) = to_jl(desugar(x))
 
 function to_jl(x::PointerType, q::Qualifier=Unqualified)
     q == Unqualified ? Ptr{to_jl(get_pointee_type(x))} : CppPtr{q,to_jl(get_pointee_type(x))}

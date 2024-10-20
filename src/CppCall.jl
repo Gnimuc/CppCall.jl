@@ -3,7 +3,7 @@ module CppCall
 using ClangCompiler
 using ClangCompiler: AbstractClangType, AbstractType, AbstractBuiltinType, AbstractRecordType
 using ClangCompiler: QualType, RecordType, EnumType, ElaboratedType, TypedefType
-using ClangCompiler: TemplateSpecializationType
+using ClangCompiler: TemplateSpecializationType, SubstTemplateTypeParmType
 using ClangCompiler: isTypeAlias, getAliasedType, isSugared, get_template_args
 using ClangCompiler: PointerType, LValueReferenceType, RValueReferenceType
 using ClangCompiler: FunctionNoProtoType, FunctionProtoType

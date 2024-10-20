@@ -47,7 +47,7 @@ macro undo(i)
                end)
 end
 
-function cppinit(::Type{T}, I::CppInterpreter=@__INSTANCE__) where {T<:Union{BuiltinTypes,CppType{S,Q}}} where {S,Q}
+function cppinit(::Type{T}, I::CppInterpreter=@__INSTANCE__) where {T<:Union{BuiltinTypes,CppType{S,Q},CppTemplate}} where {S,Q}
     clty = to_cpp(T, I)
     jlty = to_jl(clty)
     sz = size_of(get_ast_context(I), clty)
@@ -138,13 +138,20 @@ macro ref(obj)
                end)
 end
 
-_get_scope(::Type{CppType{S,Q}}, I::CppInterpreter=@__INSTANCE__) where {S,Q} = make_scope(lookup(I, string(S)), I)
-
 function cppnew(::Type{T}, I::CppInterpreter=@__INSTANCE__) where {T<:CppType{S,Q}} where {S,Q}
     s = string(S)
     haskey(DEFAULT_TYPE_MAPPING, s) && return cppnew(DEFAULT_TYPE_MAPPING[s], I)
     jlty = to_jl(to_cpp(T, I))
-    ptr = construct(_get_scope(T, I))
+    decl = lookup(I, s)
+    ptr = construct(make_scope(decl, I))
+    N = Core.sizeof(Int)
+    return CppObject{Ptr{jlty},N}(reinterpret(NTuple{N,UInt8}, ptr))
+end
+
+function cppnew(::Type{T}, I::CppInterpreter=@__INSTANCE__) where {T<:CppTemplate}
+    scope = instantiate(T, I)
+    jlty = to_jl(to_cpp(ClassTemplateSpecializationDecl(scope.data), I))
+    ptr = construct(scope)
     N = Core.sizeof(Int)
     return CppObject{Ptr{jlty},N}(reinterpret(NTuple{N,UInt8}, ptr))
 end
