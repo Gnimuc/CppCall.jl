@@ -29,3 +29,5 @@ cpptypemap(::Type{CppType{Symbol("unsigned long long"),Q}}) where {Q} = Culonglo
 cpptypemap(::Type{CppType{Symbol("float"),Q}}) where {Q} = Cfloat
 cpptypemap(::Type{CppType{Symbol("double"),Q}}) where {Q} = Cdouble
 cpptypemap(::Type{CppType{Symbol("_Bool"),Q}}) where {Q} = Bool
+
+cpptypemap(::Type{CppEnumType{S,T}}) where {S,T} = T

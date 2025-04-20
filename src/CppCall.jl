@@ -2,13 +2,15 @@ module CppCall
 
 using ClangCompiler
 using ClangCompiler: AbstractClangType, AbstractType, AbstractBuiltinType, AbstractRecordType
-using ClangCompiler: QualType, RecordType, EnumType, ElaboratedType, TypedefType
+using ClangCompiler: AbstractValueDecl, getType
+using ClangCompiler: QualType, RecordType, EnumType, ElaboratedType, TypedefType, UsingType
 using ClangCompiler: TemplateSpecializationType, SubstTemplateTypeParmType
 using ClangCompiler: isTypeAlias, getAliasedType, isSugared, get_template_args
 using ClangCompiler: PointerType, LValueReferenceType, RValueReferenceType
 using ClangCompiler: FunctionNoProtoType, FunctionProtoType
 using ClangCompiler: CXXConstructorDecl, CXXDestructorDecl, CXXMethodDecl
 using ClangCompiler: TypeDecl, RecordDecl, NamedDecl, CXXRecordDecl, ClassTemplateSpecializationDecl
+using ClangCompiler: EnumConstantDecl, getEnumConstantDeclValue
 using ClangCompiler: getDecl, getTemplateArgs, getKind, getAsType
 using ClangCompiler: TemplateArgument, CXTemplateArgument_Type, CXTemplateArgument_Integral
 using ClangCompiler: get_type_ptr, get_qual_type, get_decl_type, get_pointee_type, desugar
@@ -40,6 +42,7 @@ export LookupKind, TypeLookup, FuncLookup, FuncOverloadingLookup, lookup
 
 include("types.jl")
 export CppType, CppFunc, CppRef, CppObject
+export CppEnumType, CppEnum
 export CppPtr, CppCPtr, CppVPtr, CppCVPtr
 export CppTemplate
 

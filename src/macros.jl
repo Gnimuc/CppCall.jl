@@ -47,11 +47,20 @@ macro undo(i)
                end)
 end
 
-function cppinit(::Type{T}, I::CppInterpreter=@__INSTANCE__) where {T<:Union{BuiltinTypes,CppType{S,Q},CppTemplate}} where {S,Q}
+function cppinit(::Type{T}, I::CppInterpreter=@__INSTANCE__) where {T<:Union{BuiltinTypes,CppType{S,Z},CppEnumType{S,Z},CppTemplate}} where {S,Z}
     clty = to_cpp(T, I)
     jlty = to_jl(clty)
     sz = size_of(get_ast_context(I), clty)
     return CppObject{jlty,sz}()
+end
+
+function cppinit(::Type{T}, I::CppInterpreter=@__INSTANCE__) where {T<:CppEnum{S,N}} where {S,N}
+    decl = lookup(I, string(S), EnumLookup())
+    clty = to_cpp(decl, I)
+    jlty = to_jl(clty)
+    sz = size_of(get_ast_context(I), clty)
+    v = getEnumConstantDeclValue(EnumConstantDecl(decl))
+    return CppObject{jlty,sz}(reinterpret(NTuple{sz,UInt8}, convert(get_t(jlty), v)))
 end
 
 """

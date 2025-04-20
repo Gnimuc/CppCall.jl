@@ -2,6 +2,7 @@ abstract type LookupKind end
 struct TypeLookup <: LookupKind end
 struct FuncLookup <: LookupKind end
 struct FuncOverloadingLookup <: LookupKind end
+struct EnumLookup <: LookupKind end
 
 lookup(I::CppInterpreter, id::AbstractString, kind::LookupKind=TypeLookup()) = lookup(I, id, kind)
 
@@ -21,4 +22,10 @@ function lookup(I::CppInterpreter, id::AbstractString, kind::FuncOverloadingLook
     lookup_func(I, id) || error("failed to find the identifer: $id")
     decls = get_func_decls(I)
     return decls
+end
+
+function lookup(I::CppInterpreter, id::AbstractString, kind::EnumLookup)
+    lookup_func(I, id) || error("failed to find the identifer: $id")
+    decl = get_func_decl(I)
+    return decl
 end

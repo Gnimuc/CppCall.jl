@@ -95,17 +95,43 @@ get_targs(::Type{CppTemplate{T,TARGS}}) where {T<:CppType{S} where {S},TARGS} = 
 CppTemplate(ty, targs...) = CppTemplate{ty,Tuple{targs...}}
 
 """
-	struct CppEnum{S,T} <: AbstractCppType
-Represent a C/C++ Enum.
+	struct CppEnumType{S,T} <: AbstractCppType
+Represent a C/C++ enum type.
+For anomynous enum types, [`CppEnum`](@ref) can be used to query the enum type.
 
-`S` is a symbol, representing the fully qualified name of the enum, `T` the underlying type.
+`S` is a symbol, representing the name of the enumerator. `T` is the underlying integer type.
 """
-struct CppEnum{S,T} <: AbstractCppType
-    val::T
-end
+struct CppEnumType{S,T} <: AbstractCppType end
 
-Base.:(==)(x::CppEnum, y::Integer) = x.val == y
-Base.:(==)(x::Integer, y::CppEnum) = x == y.val
+get_s(::Type{CppEnumType{S,T}}) where {S,T} = S
+get_t(::Type{CppEnumType{S,T}}) where {S,T} = T
+
+"""
+    CppEnumType(x::AbstractString)
+Create a C++ enum type.
+For anomynous enum types, [`CppEnum`](@ref) can be used to query the enum type.
+Note that, the identifer `x` is not checked for existence in the C++ interpreter when creating the type.
+"""
+CppEnumType(x::AbstractString) = CppEnumType{Symbol(x),UInt32}
+
+# Technically, `CppEnum` is not a TYPE.
+"""
+	struct CppEnum{S,N} <: AbstractCppType
+Represent a C/C++ enumerator.
+
+`S` is a symbol, representing the name of the enumerator. `N` is the value of the enumerator.
+"""
+struct CppEnum{S,N} <: AbstractCppType end
+
+get_s(::Type{CppEnum{S,N}}) where {S,N} = S
+get_n(::Type{CppEnum{S,N}}) where {S,N} = N
+
+"""
+    CppEnum(x::AbstractString)
+Create a `CppEnum` from an enumerator name `x`.
+Note that, the `x` is not checked for existence in the C++ interpreter when creating the type.
+"""
+CppEnum(x::AbstractString) = CppEnum{Symbol(x),0}
 
 """
     primitive type GenericCppPtr{Q,T,AS} <: AbstractCppType
@@ -283,6 +309,7 @@ to_cpp(::Type{T}, I::CppInterpreter) where {T<:BuiltinTypes} = get_qual_type(jlt
 to_cpp(::Type{Ptr{T}}, I::CppInterpreter) where {T<:BuiltinTypes} = get_pointer_type(get_ast_context(I), to_cpp(T, I))
 
 to_cpp(x::NamedDecl, I::CppInterpreter) = get_decl_type(get_ast_context(I), x)
+# to_cpp(x::AbstractValueDecl, I::CppInterpreter) = getType(x)
 
 function to_cpp(::Type{Ptr{T}}, I::CppInterpreter) where {T<:CppType{S,Q}} where {S,Q}
     ast = get_ast_context(I)
@@ -322,11 +349,17 @@ function to_cpp(::Type{T}, I::CppInterpreter) where {T<:CppTemplate}
     return get_decl_type(get_ast_context(I), ctsd)
 end
 
-function to_cpp(::Type{CppEnum{S}}, I::CppInterpreter) where {S}
-    sc = CppInterOp.lookup(I, string(S))
-    decl = TypeDecl(sc.scope.data)
-    CppInterOp.@check_ptrs decl
-    return get_decl_type(get_ast_context(I), decl)
+# FIXME: Add support for enum class scope
+function to_cpp(::Type{CppEnumType{S,T}}, I::CppInterpreter) where {S,T}
+    s = string(S)
+    decl = lookup(I, s)
+    return to_cpp(decl, I)
+end
+
+function to_cpp(::Type{CppEnum{S,N}}, I::CppInterpreter) where {S,N}
+    s = string(S)
+    decl = lookup(I, s, EnumLookup())
+    return to_cpp(decl, I)
 end
 
 function get_qualifier(ty::QualType)
@@ -348,6 +381,8 @@ function get_template_name(x::AbstractType)
     i = findfirst('<', n)
     return i == nothing ? n : n[1:(i - 1)]
 end
+
+# is_unnamed(x) = isempty(x) || occursin("unnamed", x)
 
 """
     to_jl(x)
@@ -397,10 +432,11 @@ function to_jl(x::AbstractBuiltinType, q::Qualifier=Unqualified)
 end
 
 function to_jl(x::EnumType, q::Qualifier=Unqualified)
-    t = to_jl(get_integer_type(x))
+    @assert q == Unqualified "Enum types must be unqualified."
     n = get_name(x)
     sym = isempty(n) ? gensym() : Symbol(n)
-    return CppEnum{sym,t}
+    t = to_jl(get_integer_type(x))
+    return CppEnumType{sym,t}
 end
 
 function to_jl(x::AbstractRecordType, q::Qualifier=Unqualified)
@@ -447,6 +483,9 @@ function to_jl(x::TemplateSpecializationType, q::Qualifier=Unqualified)
     sym = isempty(n) ? gensym() : Symbol(n)
     return CppTemplate{CppType{sym,q},Tuple{targs...}}
 end
+
+to_jl(x::UsingType, ::Qualifier) = to_jl(x)
+to_jl(x::UsingType) = to_jl(desugar(x))
 
 to_jl(x::ElaboratedType, ::Qualifier) = to_jl(x)
 to_jl(x::ElaboratedType) = to_jl(desugar(x))
