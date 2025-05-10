@@ -4,9 +4,11 @@ using CppCall
 
 declare"""#include "overloading.h" """
 
-x = @cppinit cpp"int"
+x = @cppinit cpp"int"c
 
 @time @fcall increment(x)
+
+@time @fcall increment(x::CppRef{cpp"int"c})
 
 @time @fcall increment(x)
 

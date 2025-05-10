@@ -345,7 +345,7 @@ to_cpp(x::ClassTemplateSpecializationDecl, I::CppInterpreter) = get_decl_type(ge
 
 function to_cpp(::Type{T}, I::CppInterpreter) where {T<:CppTemplate}
     scope = instantiate(T, I)
-    ctsd = ClassTemplateSpecializationDecl(scope.data)
+    ctsd = ClassTemplateSpecializationDecl(scope.data[1])
     return get_decl_type(get_ast_context(I), ctsd)
 end
 

@@ -16,7 +16,7 @@ end
 @testset "CppTemplate" begin
     @test_logs min_level=Logging.Error declare"""#include <vector> """
 
-    const StdVector{T} = @template cpp"std::vector"{T} where T
+    StdVector{T} = @template cpp"std::vector"{T} where T
     @test StdVector{cpp"int"} == CppTemplate{cpp"std::vector",Tuple{cpp"int"}}
 
     t = @template cpp"std::vector"{cpp"int"}
@@ -41,7 +41,7 @@ end
 
     @test_logs min_level=Logging.Error declare"""#include <string> """
 
-    const StdString = cpp"std::string"
+    StdString = cpp"std::string"
     clty = to_cpp(StdString, CppCall.@__INSTANCE__)
     jlty = to_jl(clty)
     @test jlty == @template cpp"std::basic_string"{Cuchar} # std::string is an alias of std::basic_string<char>
@@ -54,7 +54,7 @@ end
 @testset "CppTemplate | Method Call" begin
     @test_logs min_level=Logging.Error declare"""#include <vector> """
 
-    const StdVector{T} = @template cpp"std::vector"{T} where T
+    StdVector{T} = @template cpp"std::vector"{T} where T
     px = @cppnew StdVector{cpp"int"}
     sz = @mcall px->size()
     @test sz[] == 0

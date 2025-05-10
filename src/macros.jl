@@ -159,7 +159,7 @@ end
 
 function cppnew(::Type{T}, I::CppInterpreter=@__INSTANCE__) where {T<:CppTemplate}
     scope = instantiate(T, I)
-    jlty = to_jl(to_cpp(ClassTemplateSpecializationDecl(scope.data), I))
+    jlty = to_jl(to_cpp(ClassTemplateSpecializationDecl(scope.data[1]), I))
     ptr = construct(scope)
     N = Core.sizeof(Int)
     return CppObject{Ptr{jlty},N}(reinterpret(NTuple{N,UInt8}, ptr))
