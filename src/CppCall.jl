@@ -7,7 +7,7 @@ using ClangCompiler: QualType, RecordType, EnumType, ElaboratedType, TypedefType
 using ClangCompiler: TemplateSpecializationType, SubstTemplateTypeParmType
 using ClangCompiler: isTypeAlias, getAliasedType, isSugared, get_template_args
 using ClangCompiler: PointerType, LValueReferenceType, RValueReferenceType
-using ClangCompiler: FunctionNoProtoType, FunctionProtoType
+using ClangCompiler: FunctionNoProtoType, FunctionProtoType, isNoThrow
 using ClangCompiler: CXXConstructorDecl, CXXDestructorDecl, CXXMethodDecl
 using ClangCompiler: TypeDecl, RecordDecl, NamedDecl, CXXRecordDecl, ClassTemplateSpecializationDecl
 using ClangCompiler: EnumConstantDecl, getEnumConstantDeclValue

@@ -151,6 +151,8 @@ get_class(::Type{S}) where {N,T<:CppType,S<:CppObject{CppCPtr{T},N}} = get_class
 get_class(::Type{S}) where {N,NR,T,V<:CppObject{T,N},S<:CppObject{Ptr{V},NR}} = get_class(T)
 get_class(::Type{S}) where {N,NR,T,V<:CppObject{T,N},S<:CppObject{CppCPtr{V},NR}} = get_class(T)
 
+get_class(::Type{S}) where {N,Q,T<:CppRef{Q},S<:CppObject{T,N}} = get_class(CppObject{Q,N})
+
 get_class(::Type{Cvoid}) = "void"
 get_class(::Type{Cchar}) = "char"
 get_class(::Type{Cuchar}) = "unsigned char"
@@ -213,12 +215,17 @@ end
 
 function dispatch(I::CppInterpreter, candidates::Vector{NamedDecl}, params)
     func = nothing
+    no_throw = false
     for x in candidates
         ty = clty_to_jlty(get_type_ptr(to_cpp(x, I)))
         dispatch(I, ty, params) || continue
+        # FIXME: use OverloadCandidateSet
         if !isnothing(func)
-            # CC.dump(x)
-            # CC.dump(func)
+            # skip noexcept methods
+            ty_func = clty_to_jlty(get_type_ptr(to_cpp(func, I)))
+            isNoThrow(ty_func) ⊻ isNoThrow(ty) || continue
+            CC.dump(x)
+            CC.dump(func)
             throw(ArgumentError("call of overloaded `$(err_signature(func, params))` is ambiguous."))
         end
         func = x
@@ -253,7 +260,7 @@ end
 end
 
 @inline function cppinvoke(x::CXScope, self::S, result::Union{CppObject,Ptr},
-                           params...) where {N,T<:CppType,S<:CppObject{T,N}}
+                           params...) where {N,T<:Union{CppType,CppTemplate},S<:CppObject{T,N}}
     ret_ptr = unsafe_pointer_rt(result)
     arg_ptrs = [unsafe_pointer(params[i]) for i = 1:(length(params) ÷ 2)]
     self_ptr = unsafe_pointer(self)
@@ -262,6 +269,14 @@ end
 
 @inline function cppinvoke(x::CXScope, self::S, result::Union{CppObject,Ptr},
                            params...) where {N,T,S<:CppObject{Ptr{T},N}}
+    ret_ptr = unsafe_pointer_rt(result)
+    arg_ptrs = [unsafe_pointer(params[i]) for i = 1:(length(params) ÷ 2)]
+    self_ptr = reinterpret(Ptr{Cvoid}, self.data)
+    return GC.@preserve self result params invoke(x, ret_ptr, arg_ptrs, self_ptr)
+end
+
+@inline function cppinvoke(x::CXScope, self::S, result::Union{CppObject,Ptr},
+                           params...) where {N,T,S<:CppObject{CppRef{T},N}}
     ret_ptr = unsafe_pointer_rt(result)
     arg_ptrs = [unsafe_pointer(params[i]) for i = 1:(length(params) ÷ 2)]
     self_ptr = reinterpret(Ptr{Cvoid}, self.data)
