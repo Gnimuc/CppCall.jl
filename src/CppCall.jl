@@ -9,6 +9,7 @@ using ClangCompiler: isTypeAlias, getAliasedType, isSugared, get_template_args
 using ClangCompiler: PointerType, LValueReferenceType, RValueReferenceType
 using ClangCompiler: FunctionNoProtoType, FunctionProtoType, isNoThrow
 using ClangCompiler: CXXConstructorDecl, CXXDestructorDecl, CXXMethodDecl
+using ClangCompiler: AbstractNamedDecl
 using ClangCompiler: TypeDecl, RecordDecl, NamedDecl, CXXRecordDecl, ClassTemplateSpecializationDecl
 using ClangCompiler: EnumConstantDecl, getEnumConstantDeclValue
 using ClangCompiler: getDecl, getTemplateArgs, getKind, getAsType

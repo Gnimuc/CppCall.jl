@@ -308,8 +308,8 @@ to_cpp(::Type{T}, I::CppInterpreter) where {T<:AbstractCppType} = error("Unsuppo
 to_cpp(::Type{T}, I::CppInterpreter) where {T<:BuiltinTypes} = get_qual_type(jlty_to_clty(T, get_ast_context(I)))
 to_cpp(::Type{Ptr{T}}, I::CppInterpreter) where {T<:BuiltinTypes} = get_pointer_type(get_ast_context(I), to_cpp(T, I))
 
-to_cpp(x::NamedDecl, I::CppInterpreter) = get_decl_type(get_ast_context(I), x)
-# to_cpp(x::AbstractValueDecl, I::CppInterpreter) = getType(x)
+to_cpp(x::AbstractNamedDecl, I::CppInterpreter) = get_decl_type(get_ast_context(I), x)
+to_cpp(x::AbstractValueDecl, I::CppInterpreter) = getType(x)
 
 function to_cpp(::Type{Ptr{T}}, I::CppInterpreter) where {T<:CppType{S,Q}} where {S,Q}
     ast = get_ast_context(I)

@@ -180,8 +180,14 @@ end
     @test_logs min_level=Logging.Error declare"""#include "class.h" """
 
     x = @ctor Foo()
-    y = @mcall x.get()
+    y = @mcall x->get()
     @test y[] == 42
+
+    n = @cppinit Cint
+    n[] = 100
+    px = @ctor Foo(n)
+    y = @mcall x->get()
+    @test n[] == 100
 
     z = @cppinit Cint
     z[] = 1

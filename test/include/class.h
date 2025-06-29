@@ -5,6 +5,7 @@
 
 class Foo {
 public:
+    Foo(int x) : x(x) {}
     Foo() : x(42) {}
     int get() const { return x; }
     void set(int v) { x = v; }

@@ -72,8 +72,8 @@ struct CppIdentifier{S} end
     end
 end
 
-# @ctor cppty()
-# @ctor nns::cppty()
+# @ctor cppty(a, b)
+# @ctor nns::cppty(a::T, b::S)
 macro ctor(expr)
     type_name = nns(expr)
     call_expr = expr
@@ -86,26 +86,31 @@ macro ctor(expr)
     end
 
     args = map(x -> Meta.isexpr(x, :(::)) ? x.args[1] : x, call_expr.args[2:end])
+    annots = map(x -> Meta.isexpr(x, :(::)) ? x.args[2] : :nothing, call_expr.args[2:end])
 
     @gensym CC_ID CC_CTX CC_TY
     return esc(quote
                    local $CC_ID = CppCall.get_instance_id($__module__)
                    local $CC_CTX = CppCall.CppContext{$CC_ID}()
                    local $CC_TY = CppCall.CppIdentifier{Symbol($type_name)}()
-                   CppCall.cppctorcall($CC_CTX, $CC_TY, $(args...))
+                   CppCall.cppctorcall($CC_CTX, $CC_TY, $(args...), $(annots...))
                end)
 end
 
 @generated function cppctorcall(::CppContext{ID}, ::CppIdentifier{S}, params...) where {ID,S}
     I = CPPCALL_INSTANCES[ID]
-    candidates = lookup(I, string(S), FuncOverloadingLookup())
-    record = dispatch(I, candidates, params)
-    isnothing(record) && throw(ArgumentError("no default constructor for `$S`"))
-    ctor = CC.LookupDefaultConstructor(get_sema(I), CXXRecordDecl(record.ptr))
+    candidates = lookup(I, string(S), ConstructorLookup())
+    ctor = dispatch(I, candidates, params)
+    isnothing(ctor) &&
+        throw(ArgumentError("no matching function for call to `$(err_signature(first(candidates), params))`"))
     scope = make_scope(ctor, I)
-    retty = to_jl(to_cpp(record, I))
+    record = lookup(I, string(S), TypeLookup())
+    clty = to_cpp(record, I)
+    retty = to_jl(clty)
+    # sz = size_of(get_ast_context(I), clty)
     return quote
         Base.@_inline_meta
+        # ret = CppObject{$retty,$sz}()
         ret = CppObject{Ptr{$retty},Core.sizeof(Int)}()
         cppinvoke($scope, C_NULL, ret, params...)
         return ret
@@ -213,7 +218,7 @@ get_class(::Type{S}) where {N,T<:CppTemplate,S<:CppObject{CppCPtr{T},N}} = get_c
     end
 end
 
-function dispatch(I::CppInterpreter, candidates::Vector{NamedDecl}, params)
+function dispatch(I::CppInterpreter, candidates::Vector{T}, params) where {T<:AbstractNamedDecl}
     func = nothing
     no_throw = false
     for x in candidates
@@ -235,7 +240,7 @@ end
 
 _unwrap(::Type{Type{T}}) where {T} = T
 
-@inline function dispatch(I::CppInterpreter, func::FunctionProtoType, params)
+@inline function dispatch(I::CppInterpreter, func::Union{FunctionProtoType,CXXConstructorDecl}, params)
     argnum = length(params) ÷ 2
     get_param_num(func) != argnum && return false
     for i = 1:argnum
