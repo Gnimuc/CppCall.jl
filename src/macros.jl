@@ -191,11 +191,29 @@ cppdelete(x::CppObject{Ptr{T},N}) where {T,N} = deallocate(convert(Ptr{Cvoid}, x
 
 """
     @cppdelete obj
-Deallocate/destruct the `obj` which is allocated by `@cppnew`.
+Deallocate/destruct the `obj` which is allocated by `@cppnew`/`@ctor`.
 """
 macro cppdelete(obj)
     return esc(:(CppCall.cppdelete($obj)))
 end
+
+function cppderef(x::CppObject{Ptr{T},N}, I::CppInterpreter=@__INSTANCE__) where {T<:CppType{S,Q}} where {S,Q,N}
+    sz = size_of(get_ast_context(I), to_cpp(T, I))
+    return unsafe_load(reinterpret(Ptr{CppObject{T,sz}}, x.data))
+end
+
+"""
+    @* ptr
+Dereference the `ptr` which is allocated by `@cppnew`/`@ctor`.
+"""
+macro *(ptr)
+    @gensym CC_INSTANCE
+    return esc(quote
+                   local $CC_INSTANCE = CppCall.get_instance($__module__)
+                   CppCall.cppderef($ptr, $CC_INSTANCE)
+               end)
+end
+
 
 """
     @cpp_str -> CppType
