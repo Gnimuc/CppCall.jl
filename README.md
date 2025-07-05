@@ -71,7 +71,58 @@ month = @cppinit CppEnum("June")
 year = @cppinit cpp"Year"
 year[] = 2025
 
+is_leap = @fcall Date::isLeap(year)
+@assert !is_leap[]
+
 dp = @ctor Date(day, month, year)
 y = @mcall dp->year()
 @assert y[] == 2025
+m = @mcall dp->month()
+@assert m[] == month[]
+wd = @mcall dp->weekday()
+@assert wd[] == 1
+d = @* dp 
+@cppdelete dp
+
+y = @mcall d.year()
+@assert y[] == 2025
+m = @mcall d.month()
+@assert m[] == month[]
+
+date_s = @fcall Date::startOfMonth(d)
+day_s = @mcall date_s.dayOfMonth()
+@assert day_s[] == 1
+
+today = @fcall Date::todaysDate()
+s = @mcall today.serialNumber()
+s[]
+d1 = @mcall today.dayOfMonth()
+
+dp = @ctor Date(s)
+d2 = @mcall dp->dayOfMonth()
+@assert d1[] == d2[]
+@cppdelete dp
+
+calendar = @ctor TARGET()
+n = @mcall calendar->name()
+str = @mcall n.c_str()
+@assert unsafe_string(str[]) == "TARGET"
+
+day[] = 30
+d2 = @* @ctor Date(day, month, year)
+res = @mcall calendar->isHoliday(d2)
+@assert !res[]
+@mcall calendar->addHoliday(d2)
+res = @mcall calendar->isHoliday(d2)
+@assert res[]
+
+hs = @mcall calendar.addedHolidays()
+sz = @mcall hs.size()
+@assert sz[] == 1
+
+incws = @cppinit cpp"bool"
+incws[] = false
+list = @mcall calendar->holidayList(d, d2, incws)
+
+@cppdelete calendar
 ```
