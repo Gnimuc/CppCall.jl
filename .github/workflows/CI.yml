@@ -16,6 +16,12 @@ jobs:
     name: Julia ${{ matrix.version }} - ${{ matrix.os }} - ${{ matrix.arch }} - ${{ github.event_name }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 60
+    # nightly cannot pass today, and the reason is not ours: ClangCompiler selects its bindings
+    # directory from Base.libllvm_version at load time and ships only lib/18, so on nightly's
+    # LLVM it dies with `lib/22/LibClangEx.jl: No such file or directory` before a single test
+    # runs. Keep running it -- it is how we will notice ClangCompiler gaining those bindings --
+    # but do not let it block a PR in the meantime.
+    continue-on-error: ${{ matrix.version == 'nightly' }}
     permissions: # needed to allow julia-actions/cache to proactively delete old caches that it has created
       actions: write
       contents: read
