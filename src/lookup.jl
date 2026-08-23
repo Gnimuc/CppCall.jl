@@ -36,9 +36,9 @@ function lookup(I::CppInterpreter, id::AbstractString, kind::ConstructorLookup)
     ty_decl = get_type_decl(I)
     ctors = CXXConstructorDecl[]
     for decl in CC.DeclIterator(ty_decl)
-        ctor = CXXConstructorDecl(decl)
-        ctor.ptr == C_NULL && continue
-        push!(ctors, ctor)
+        # the cast is checked, so the class has to be established before crossing to it
+        CC.isCXXConstructorDecl(decl) || continue
+        push!(ctors, CXXConstructorDecl(decl))
     end
     return ctors
 end

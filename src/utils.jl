@@ -1,7 +1,3 @@
-function make_scope(decl::Union{NamedDecl,CXXConstructorDecl,CXXDestructorDecl}, interp::CppInterpreter)
-    CppInterOp.make_scope(decl.ptr, get_ptr(interp))
-end
-
 @noinline gcuse(x) = x
 
 function err_signature(func, params)

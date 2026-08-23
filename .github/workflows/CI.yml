@@ -24,7 +24,12 @@ jobs:
       matrix:
         version:
           - '1.12'
-          - 'nightly'
+          # 'nightly' is deliberately absent. ClangCompiler picks its bindings directory from
+          # Base.libllvm_version at load time and ships only lib/18, so on nightly's LLVM it
+          # dies with `lib/22/LibClangEx.jl: No such file or directory` before a single test
+          # runs -- there is nothing this repo can do about it, and a permanently failing job
+          # reports no information. Restore this line once ClangCompiler generates bindings for
+          # the LLVM version nightly ships.
         os:
           - ubuntu-latest
         arch:
