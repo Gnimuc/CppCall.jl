@@ -9,9 +9,12 @@ struct CppInterpreter
     bridge::ClangCompiler.CxxInterpreter
     lookup_type::DeclFinder
     lookup_func::DeclFinder
-    # decl address -> address of its `extern "C"` call trampoline, see `wrap.jl`. Keyed by
-    # the bare integer because ClangCompiler gives each handle class its own pointer type.
-    wrappers::Dict{UInt,Ptr{Cvoid}}
+    # (decl address, receiver class, move mask) -> its `extern "C"` trampoline, see `wrap.jl`.
+    # The decl alone does not identify the trampoline: the receiver class decides the `this`
+    # adjustment under multiple inheritance, and the move mask decides whether a by-value
+    # parameter copies or moves. The address is a bare integer because ClangCompiler gives each
+    # handle class its own pointer type.
+    wrappers::Dict{Tuple{UInt,String,UInt32},Ptr{Cvoid}}
     # C++ spelling of a type -> address of the function that heap-allocates one
     builders::Dict{String,Ptr{Cvoid}}
     # C++ spelling of a template-id -> the type Clang instantiated for it
@@ -39,7 +42,7 @@ Create a C/C++ interpreter instance.
 function initialize(args::Vector{String}=String[]; is_cxx=true, version=JLLEnvs.GCC_MIN_VER)
     CxxI = CC.create_interpreter(args; is_cxx, version)
     return CppInterpreter(CxxI, DeclFinder(CxxI, CC.CXLookupNameKind_LookupTagName),
-                          DeclFinder(CxxI), Dict{UInt,Ptr{Cvoid}}(),
+                          DeclFinder(CxxI), Dict{Tuple{UInt,String,UInt32},Ptr{Cvoid}}(),
                           Dict{String,Ptr{Cvoid}}(), Dict{String,QualType}(), Set{String}(),
                           Ref(0), Ref(true), Ref(""))
 end

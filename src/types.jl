@@ -135,9 +135,10 @@ CppEnum(x::AbstractString) = CppEnum{Symbol(x),0}
 
 """
     primitive type GenericCppPtr{Q,T,AS} <: AbstractCppType
-Represent a generic qualified C++ pointer.
+A C++ pointer that carries its own cv-qualification, for the cases where `Ptr{T}` cannot:
+`T *const` and `T *volatile` differ from `T *` in the pointer, not the pointee.
 """
-primitive type GenericCppPtr{Q,T,AS} <: AbstractCppType sizeof(Int) end
+primitive type GenericCppPtr{Q,T,AS} <: AbstractCppType 8 * sizeof(Int) end
 
 const CppPtr{Q,T} = GenericCppPtr{Q,T,Core.CPU}
 
@@ -145,158 +146,118 @@ const CppCPtr{T} = CppPtr{C,T}
 const CppVPtr{T} = CppPtr{V,T}
 const CppCVPtr{T} = CppPtr{CV,T}
 
-Base.cconvert(::Type{Ptr{Cvoid}}, x::CppPtr{Q,T}) where {Q,T} = reinterpret(Ptr{T}, x)
+Base.unsafe_convert(::Type{Ptr{Cvoid}}, x::CppPtr) = reinterpret(Ptr{Cvoid}, x)
+CppPtr{Q,T}(p::Ptr) where {Q,T} = reinterpret(CppPtr{Q,T}, p)
+Base.pointer(x::CppPtr{Q,T}) where {Q,T} = reinterpret(Ptr{T}, x)
 
 unwrap_type(::Type{CppPtr{Q,T}}) where {Q,T} = T
 
+is_const_ptr(::Type{CppPtr{Q,T}}) where {Q,T} = Q === C || Q === CV
+is_volatile_ptr(::Type{CppPtr{Q,T}}) where {Q,T} = Q === V || Q === CV
+is_const_ptr(::Type{<:Ptr}) = false
+is_volatile_ptr(::Type{<:Ptr}) = false
+is_const_ptr(x) = is_const_ptr(typeof(x))
+is_volatile_ptr(x) = is_volatile_ptr(typeof(x))
+
 """
     struct CppRef{T} <: AbstractCppType
-Represent a C++ reference.
+A C++ lvalue: the address of an object, plus whatever Julia object owns the storage.
+
+`owner` is what makes a reference safe to hold. A raw `Ptr` into a Julia-owned buffer is
+collectable the moment the last other binding goes away; a `CppRef` keeps its referent alive
+for exactly as long as the reference itself is reachable. It is `nothing` when the referent
+belongs to C++ -- a reference returned from a call -- where Julia has nothing to keep alive.
 """
-struct CppRef{T} <: AbstractCppType end
+struct CppRef{T} <: AbstractCppType
+    ptr::Ptr{Cvoid}
+    owner::Any
+end
+
+CppRef{T}(p::Ptr) where {T} = CppRef{T}(reinterpret(Ptr{Cvoid}, p), nothing)
+
+"""
+    struct CppRvalueRef{T} <: AbstractCppType
+A C++ xvalue -- what `@move` produces, and what a `T&&` return yields. Binding one to a
+parameter permits the callee to move from it.
+"""
+struct CppRvalueRef{T} <: AbstractCppType
+    ptr::Ptr{Cvoid}
+    owner::Any
+end
+
+CppRvalueRef{T}(p::Ptr) where {T} = CppRvalueRef{T}(reinterpret(Ptr{Cvoid}, p), nothing)
+
+const AnyCppRef{T} = Union{CppRef{T},CppRvalueRef{T}}
 
 unwrap_type(::Type{CppRef{T}}) where {T} = T
+unwrap_type(::Type{CppRvalueRef{T}}) where {T} = T
 
-# only for type checking
-struct CppRvalueRef{T} <: AbstractCppType end
+Base.unsafe_convert(::Type{Ptr{Cvoid}}, x::AnyCppRef) = x.ptr
+# `cconvert` returning the reference itself is what roots `owner` for the duration of a ccall:
+# Julia keeps the `cconvert` result alive across the call, and the reference holds the owner.
+Base.cconvert(::Type{Ptr{Cvoid}}, x::AnyCppRef) = x
+
+Base.getindex(x::AnyCppRef{T}) where {T} = unsafe_load(reinterpret(Ptr{machine_type_of(T)}, x.ptr))
+
+function Base.setindex!(x::CppRef{T}, v) where {T}
+    is_readonly(T) && error("assignment to a reference to const")
+    M = machine_type_of(T)
+    unsafe_store!(reinterpret(Ptr{M}, x.ptr), convert(M, v))
+    return v
+end
 
 """
-    mutable struct CppObject{T,N} <: Any
-Represent a C++ object in Julia.
+    struct CppEnumValue{S,U} <: AbstractCppType
+A C++ enumerator value. `S` names the enum type and `U` is its underlying integer type. It is
+isbits, so it lives on the stack like any other Julia value.
 """
-mutable struct CppObject{T,N}
+struct CppEnumValue{S,U} <: AbstractCppType
+    val::U
+end
+
+Base.getindex(x::CppEnumValue) = x.val
+Base.convert(::Type{T}, x::CppEnumValue) where {T<:Integer} = convert(T, x.val)
+(::Type{T})(x::CppEnumValue) where {T<:Integer} = T(x.val)
+Base.:(==)(x::CppEnumValue, y::Number) = x.val == y
+Base.:(==)(x::Number, y::CppEnumValue) = x == y.val
+Base.:(==)(x::CppEnumValue{S,U}, y::CppEnumValue{S,U}) where {S,U} = x.val == y.val
+Base.show(io::IO, x::CppEnumValue{S,U}) where {S,U} = print(io, S, "(", x.val, ")")
+
+"""
+    struct CppValue{T,N} <: Any
+Storage for a C++ value with no Julia counterpart -- a class or union passed or returned by
+value, a `long double`, a pointer-to-member.
+
+It is an immutable `NTuple` of bytes, so it is isbits and lives on the stack. Getting an
+address for it -- which a call needs -- is `Ref(v)`, exactly as for any other Julia value.
+"""
+struct CppValue{T,N}
     data::NTuple{N,UInt8}
 end
 
-Base.isassigned(x::CppObject) = isdefined(x, :data)
+CppValue{T,N}() where {T,N} = CppValue{T,N}(ntuple(Returns(0x00), N))
 
-function Base.unsafe_convert(P::Union{Type{Ptr{T}},Type{Ptr{Cvoid}}}, x::CppObject{T})::P where {T}
-    p = pointer_from_objref(x)
-    p == C_NULL && throw(UndefRefError())
-    return p
+unwrap_type(::Type{CppValue{T,N}}) where {T,N} = T
+unwrap_size(::Type{CppValue{T,N}}) where {T,N} = N
+
+Base.sizeof(::Type{CppValue{T,N}}) where {T,N} = N
+
+# The machine type behind a user-facing type, for reading and writing through a reference.
+machine_type_of(::Type{T}) where {T} = T
+# NB: not `something(machine_type(...), error(...))` -- `something` is an ordinary function, so
+# its second argument is evaluated first and the error would fire unconditionally.
+function machine_type_of(::Type{CppType{S,Q}}) where {S,Q}
+    m = machine_type(CppType{S,Unqualified})
+    m === nothing && error("`$S` has no Julia machine type")
+    return m
 end
-# Base.unsafe_convert(::Type{Ptr{Any}}, x::CppObject{Any})::Ptr{Any} = pointer_from_objref(x)
+machine_type_of(::Type{CppEnumType{S,U}}) where {S,U} = U
+machine_type_of(::Type{CppEnumValue{S,U}}) where {S,U} = U
 
-Base.convert(::Type{T}, x::CppObject) where {T} = reinterpret(T, x.data)
-
-Base.getindex(obj::CppObject{T}) where {T} = convert(cpptypemap(T), obj)
-
-function Base.setindex!(obj::CppObject{T,N}, x) where {T,N}
-    obj.data = reinterpret(NTuple{N,UInt8}, convert(cpptypemap(T), x))
-    return x
-end
-
-Base.setindex!(obj::CppObject{CppType{T,C},N}, x) where {T,N} = error("assignment of read-only variable $obj")
-
-unsafe_pointer(x::CppObject) = Base.unsafe_convert(Ptr{Cvoid}, x)
-unsafe_pointer(x::CppObject{CppRef{CppObject{T,N}},NR}) where {T,N,NR} = reinterpret(Ptr{T}, x.data)
-unsafe_pointer(x::CppObject{CppRef{T},N}) where {T,N} = reinterpret(Ptr{T}, x.data)
-unsafe_pointer(x::Ptr{Cvoid}) = x
-
-unsafe_pointer_rt(x::CppObject) = Base.unsafe_convert(Ptr{Cvoid}, x)
-unsafe_pointer_rt(x::CppObject{CppRef{T},N}) where {T,N} = pointer_from_objref(x)
-unsafe_pointer_rt(x::Ptr{Cvoid}) = x
-
-unwrap_type(::Type{CppObject{T,N}}) where {T,N} = T
-unwrap_size(::Type{CppObject{T,N}}) where {T,N} = N
-
-# zero-initialization
-CppObject{T,N}() where {T,N} = CppObject{T,N}(ntuple(Returns(0x00), N))
-CppObject{CppRef{T}}() where {T} = CppObject{CppRef{T},Core.sizeof(Int)}()
-CppObject{Ptr{T}}() where {T} = CppObject{Ptr{T},Core.sizeof(Int)}()
-# CppObject{T}() where {T<:BuiltinTypes} = CppObject{T,Core.sizeof(T)}()
-
-# pointers
-# with the current design it's a bit tricky to make a difference between:
-# - CppObject{Ptr{CppType{T}}} -> represents a heap-allocated pointer
-# - CppObject{Ptr{CppObject{CppType{T}}}} -> represents a heap-allocated pointer to a heap-allocated object
-# the former doesn't store the size of the C++ type, dereferencing the pointer is required to
-# lookup the size of the type explicitly, while the latter does store the size, so it can be
-# dereferenced directly via `unsafe_load`.
-# the former should be used if the details of the type are not important (e.g. representing opaque pointers)
-# the latter can be used like a `WeakRef`, it doesn't extend the lifetime of the object, so
-# `GC.@preserve` should be used to keep the underlying object alive, when the object is allocated by Julia.
-#
-# note that, unlike references, pointers can be dangling, so it's important to keep track of the
-# lifetime of the object they point to, especially when the object is allocated by Julia's GC.
-function CppObject{Ptr}(x::CppObject{T,N}) where {T,N}
-    S = Core.sizeof(Int)
-    return GC.@preserve x CppObject{Ptr{CppObject{T,N}},S}(reinterpret(NTuple{S,UInt8}, pointer_from_objref(x)))
-end
-
-function CppObject{CppCPtr}(x::CppObject{T,N}) where {T,N}
-    S = Core.sizeof(Int)
-    return GC.@preserve x CppObject{CppCPtr{CppObject{T,N}},S}(reinterpret(NTuple{S,UInt8}, pointer_from_objref(x)))
-end
-
-function CppObject{CppVPtr}(x::CppObject{T,N}) where {T,N}
-    S = Core.sizeof(Int)
-    return GC.@preserve x CppObject{CppVPtr{CppObject{T,N}},S}(reinterpret(NTuple{S,UInt8}, pointer_from_objref(x)))
-end
-
-function CppObject{CppCVPtr}(x::CppObject{T,N}) where {T,N}
-    S = Core.sizeof(Int)
-    return GC.@preserve x CppObject{CppCVPtr{CppObject{T,N}},S}(reinterpret(NTuple{S,UInt8}, pointer_from_objref(x)))
-end
-
-is_const_ptr(::CppObject{Ptr{T}}) where {T} = false
-is_volatile_ptr(::CppObject{Ptr{T}}) where {T} = false
-
-is_const_ptr(::CppObject{CppCPtr{T}}) where {T} = true
-is_volatile_ptr(::CppObject{CppCPtr{T}}) where {T} = false
-
-is_const_ptr(::CppObject{CppVPtr{T}}) where {T} = false
-is_volatile_ptr(::CppObject{CppVPtr{T}}) where {T} = true
-
-is_const_ptr(::CppObject{CppCVPtr{T}}) where {T} = true
-is_volatile_ptr(::CppObject{CppCVPtr{T}}) where {T} = true
-
-# references
-# references are implemented as pointers:
-# - CppObject{Ref{CppType{T}}} -> a CppObject that represents a reference
-# - CppObject{Ref{CppObject{CppType{T}}}} -> a CppObject that represents a reference to a CppObject
-# the former is used when the original object is unknown, for example, it is used as the
-# return type of a C++ function which returns a reference. but unlike C++, the return value
-# doesn't extend the lifetime of the original object. if the original object is allocated by Julia,
-# `GC.@preserve` should be used to keep the object alive.
-# the latter is used to create a reference to a CppObject that is allocated by Julia GC,
-# the `@ref` macro needs to be used to extend the lifetime of the object.
-function CppObject{CppRef}(x::CppObject{T,N}) where {T,N}
-    S = Core.sizeof(Int)
-    return GC.@preserve x CppObject{CppRef{CppObject{T,N}},S}(reinterpret(NTuple{S,UInt8}, pointer_from_objref(x)))
-end
-
-# there is no reference to reference in C++, it's equivalent to make a binding to the original object
-CppObject{CppRef}(x::CppObject{CppRef{T},N}) where {T,N} = x
-
-Base.getindex(x::CppObject{CppRef{T},N}) where {T,N} = error("failed to dereference the C++ reference $x.")
-
-function Base.getindex(x::CppObject{CppRef{CppObject{T,N}},NR}) where {T,N,NR}
-    ptr = reinterpret(Ptr{NTuple{N,UInt8}}, x.data)
-    refee = unsafe_pointer_to_objref(ptr)
-    return refee[]
-end
-
-function Base.setindex!(obj::CppObject{CppRef{CppObject{T,N}}}, x) where {T,N}
-    ptr = reinterpret(Ptr{NTuple{N,UInt8}}, obj.data)
-    unsafe_store!(ptr, reinterpret(NTuple{N,UInt8}, convert(cpptypemap(T), x)))
-    return x
-end
-
-function Base.setindex!(obj::CppObject{CppRef{CppObject{CppType{T,C},N}}}, x) where {T,N}
-    error("assignment of read-only reference $obj")
-end
-
-# builtin types
-function CppObject{T}(x::S) where {T<:BuiltinTypes,S}
-    N = Core.sizeof(T)
-    CppObject{T,N}(reinterpret(NTuple{N,UInt8}, convert(T, x)))
-end
-
-function CppObject{T}(x::S) where {T,S}
-    N = Core.sizeof(S)
-    CppObject{T,N}(reinterpret(NTuple{N,UInt8}, x))
-end
+is_readonly(::Type) = false
+is_readonly(::Type{CppType{S,Q}}) where {S,Q} = Q === C || Q === CV
+is_readonly(::Type{CppTemplate{T,A}}) where {T,A} = is_readonly(T)
+# the CppOpaque method lives in sig.jl, beside the type it dispatches on
 
 # type mapping
 """
@@ -403,10 +364,10 @@ end
 
 to_jl(x::CC.VoidTy) = Cvoid
 to_jl(x::CC.BoolTy) = Bool
-to_jl(x::CC.CharTy) = Cuchar
+to_jl(x::CC.CharTy) = Cchar
 to_jl(x::CC.WCharTy) = Cwchar_t
 to_jl(x::CC.WideCharTy) = Cwchar_t
-to_jl(x::CC.SignedCharTy) = Cchar
+to_jl(x::CC.SignedCharTy) = Int8
 to_jl(x::CC.ShortTy) = Cshort
 to_jl(x::CC.IntTy) = Cint
 to_jl(x::CC.LongTy) = Clong
@@ -426,20 +387,19 @@ to_jl(x::CC.BFloat16Ty) = Float16
 to_jl(x::CC.NullPtrTy) = Ptr{Cvoid}
 to_jl(x::CC.VoidPtrTy) = Ptr{Cvoid}
 
-function to_jl(x::AbstractBuiltinType, q::Qualifier=Unqualified)
-    q == Unqualified && return to_jl(x)
-    n = CC.get_name(get_qual_type(x))
-    @assert !isempty(n) "Builtin types must have a name."
-    sym = Symbol(n)
-    return CppType{sym,q}
+# A builtin with no explicit method above lands here rather than recursing: `long double`,
+# `char16_t` and friends have no Julia counterpart, and saying so is a routine answer.
+to_jl(x::AbstractBuiltinType) = CppType{Symbol(builtin_spelling(x)),Unqualified}
+
+function to_jl(x::AbstractBuiltinType, q::Qualifier)
+    q === Unqualified && return to_jl(x)
+    return CppType{Symbol(builtin_spelling(x)),q}
 end
 
 function to_jl(x::EnumType, q::Qualifier=Unqualified)
-    @assert q == Unqualified "Enum types must be unqualified."
-    n = get_name(x)
-    sym = isempty(n) ? gensym() : Symbol(n)
-    t = to_jl(get_integer_type(x))
-    return CppEnumType{sym,t}
+    sym = stable_name(getDecl(x))
+    q === Unqualified || return CppType{sym,q}
+    return CppEnumType{sym,to_jl(get_integer_type(x))}
 end
 
 function to_jl(x::AbstractRecordType, q::Qualifier=Unqualified)
@@ -447,7 +407,7 @@ function to_jl(x::AbstractRecordType, q::Qualifier=Unqualified)
     # a plain record is not a specialization, and the cast to one is checked
     if !CC.isClassTemplateSpecializationDecl(decl)
         n = get_name(x)
-        sym = isempty(n) ? gensym() : Symbol(n)
+        sym = isempty(n) ? stable_name(decl) : Symbol(n)
         return CppType{sym,q}
     end
     ctsd = ClassTemplateSpecializationDecl(decl)
@@ -466,7 +426,7 @@ function to_jl(x::AbstractRecordType, q::Qualifier=Unqualified)
         end
     end
     n = get_template_name(x)
-    sym = isempty(n) ? gensym() : Symbol(n)
+    sym = isempty(n) ? stable_name(getDecl(x)) : Symbol(n)
     return CppTemplate{CppType{sym,q},Tuple{targs...}}
 end
 
@@ -485,7 +445,8 @@ function to_jl(x::TemplateSpecializationType, q::Qualifier=Unqualified)
         end
     end
     n = get_template_name(x)
-    sym = isempty(n) ? gensym() : Symbol(n)
+    # a TemplateSpecializationType has no decl to name; fall back to its own spelling
+    sym = isempty(n) ? Symbol(CC.getAsString(get_qual_type(x))) : Symbol(n)
     return CppTemplate{CppType{sym,q},Tuple{targs...}}
 end
 

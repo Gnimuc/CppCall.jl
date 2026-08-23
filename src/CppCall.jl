@@ -28,27 +28,24 @@ export cppinclude, declare
 
 include("utils.jl")
 
-include("wrap.jl")
-
 include("lookup.jl")
 export LookupKind, TypeLookup, FuncLookup, FuncOverloadingLookup, lookup
 
 include("types.jl")
-export CppType, CppFunc, CppRef, CppObject
-export CppEnumType, CppEnum
+export CppType, CppFuncType, CppRef, CppRvalueRef, CppValue
+export CppEnumType, CppEnum, CppEnumValue
 export CppPtr, CppCPtr, CppVPtr, CppCVPtr
 export CppTemplate
 
-include("typemap.jl")
-export cpptypemap
+include("sig.jl")
 
-include("convert.jl")
+include("wrap.jl")
 
 include("macros.jl")
 export @declare_str, @include
-export @cpp_str, @qualty
-export @cppinit, @cppnew, @cppdelete, @*
-export @ptr, @cptr, @vptr, @cvptr, @ref, @template
+export @cpp_str, @qualty_str
+export @cppnew, @cppdelete, @cppenum
+export @ptr, @ref, @move, @template
 
 include("registry.jl")
 export register, get_instance, get_instance_id

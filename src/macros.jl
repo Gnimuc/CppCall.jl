@@ -47,34 +47,6 @@ macro undo(i)
                end)
 end
 
-function cppinit(::Type{T}, I::CppInterpreter=@__INSTANCE__) where {T<:Union{BuiltinTypes,CppType{S,Z},CppEnumType{S,Z},CppTemplate}} where {S,Z}
-    clty = to_cpp(T, I)
-    jlty = to_jl(clty)
-    sz = size_of(get_ast_context(I), clty)
-    return CppObject{jlty,sz}()
-end
-
-function cppinit(::Type{T}, I::CppInterpreter=@__INSTANCE__) where {T<:CppEnum{S,N}} where {S,N}
-    decl = lookup(I, string(S), EnumLookup())
-    clty = to_cpp(decl, I)
-    jlty = to_jl(clty)
-    sz = size_of(get_ast_context(I), clty)
-    v = getEnumConstantDeclValue(EnumConstantDecl(decl))
-    return CppObject{jlty,sz}(reinterpret(NTuple{sz,UInt8}, convert(get_t(jlty), v)))
-end
-
-"""
-    @cppinit cppty
-Create a C++ object of type `cppty` with zero initialized values.
-"""
-macro cppinit(cppty)
-    @gensym CC_INSTANCE
-    return esc(quote
-                   local $CC_INSTANCE = CppCall.get_instance($__module__)
-                   CppCall.cppinit($cppty, $CC_INSTANCE)
-               end)
-end
-
 """
     @template cppty{T1, T2, ..., TN} where {T1, T2, ..., TN} -> CppTemplate{cppty, Tuple{T1, T2, ..., TN}}
 Construct a `CppTemplate` with template arguments T1, T2, ..., TN.
@@ -99,81 +71,129 @@ macro template(expr)
     return expr
 end
 
-"""
-    @ptr obj
-Create a C++ object that represents a `Unqualified`-pointer to `obj`.
-"""
-macro ptr(obj)
-    return esc(:(CppObject{Ptr}($obj)))
-end
+# References and pointers -------------------------------------------------------------------
+#
+# Storage is Julia's own: `Ref(x)` is how you make a C++ lvalue out of a Julia value, and a
+# `Ref` can be passed anywhere a `T&` or a `T*` is wanted. These macros exist for the two
+# things `Ref` alone cannot say.
 
 """
-    @cptr obj
-Create a C++ object that represents a `Const_Qualified`-pointer to `obj`.
-"""
-macro cptr(obj)
-    return esc(:(CppObject{CppCPtr}($obj)))
-end
+    cppref(x) -> CppRef
+Take a C++ reference to Julia-owned storage.
 
+Unlike a bare pointer, the result keeps its referent alive: it holds the owning object, so the
+storage cannot be collected while the reference is reachable. That is what makes it safe to
+return one from a function or store it in a container.
 """
-    @vptr obj
-Create a C++ object that represents a `Volatile_Qualified`-pointer to `obj`.
-"""
-macro vptr(obj)
-    return esc(:(CppObject{CppVPtr}($obj)))
-end
-
-"""
-    @cvptr obj
-Create a C++ object that represents a `Const_Volatile_Qualified`-pointer to `obj`.
-"""
-macro cvptr(obj)
-    return esc(:(CppObject{CppCVPtr}($obj)))
-end
+cppref(x::Base.RefValue{T}) where {T} = CppRef{T}(Base.unsafe_convert(Ptr{T}, x), x)
+cppref(x::CppRef) = x
+cppref(x::Ptr{T}) where {T} = CppRef{T}(reinterpret(Ptr{Cvoid}, x), nothing)
 
 """
     @ref obj
-Create a C++ object that represents a reference to `obj`.
+Create a C++ reference to `obj` that keeps `obj` alive for as long as the reference lives.
 """
 macro ref(obj)
-    @gensym CC_VAR CC_X
+    return esc(:(CppCall.cppref($obj)))
+end
+
+"""
+    cppmove(x) -> CppRvalueRef
+Mark storage as movable-from, so a call binds it to a `T&&` parameter and the callee may take
+its contents. The Julia object stays alive; its C++ contents may not survive the call.
+"""
+cppmove(x::Base.RefValue{T}) where {T} = CppRvalueRef{T}(Base.unsafe_convert(Ptr{T}, x), x)
+cppmove(x::CppRef{T}) where {T} = CppRvalueRef{T}(x.ptr, x.owner)
+cppmove(x::CppRvalueRef) = x
+
+"""
+    @move obj
+Bind `obj` to a `T&&` parameter, permitting the callee to move from it -- C++'s `std::move`.
+"""
+macro move(obj)
+    return esc(:(CppCall.cppmove($obj)))
+end
+
+"""
+    cppptr(x) -> Ptr
+The address of Julia-owned storage.
+
+This does **not** keep the storage alive. Wrap the call in `GC.@preserve`, or use [`@ref`](@ref),
+which does.
+"""
+cppptr(x::Base.RefValue{T}) where {T} = Base.unsafe_convert(Ptr{T}, x)
+cppptr(x::AnyCppRef{T}) where {T} = reinterpret(Ptr{T}, x.ptr)
+cppptr(x::Ptr) = x
+
+"""
+    @ptr obj
+Take the address of `obj`. The result does not extend `obj`'s lifetime -- see [`@ref`](@ref).
+"""
+macro ptr(obj)
+    return esc(:(CppCall.cppptr($obj)))
+end
+
+# Enumerators -------------------------------------------------------------------------------
+
+"""
+    cppvalue(::Type{CppEnum{S,N}}, I) -> CppEnumValue
+The value of the C++ enumerator named `S`, typed by the enum it belongs to.
+"""
+function cppvalue(::Type{T}, I::CppInterpreter=@__INSTANCE__) where {T<:CppEnum{S,N}} where {S,N}
+    decl = lookup(I, string(S), EnumLookup())
+    jlty = to_jl(to_cpp(decl, I))
+    U = machine_type_of(jlty)
+    return CppEnumValue{get_s(jlty),U}(convert(U, getEnumConstantDeclValue(EnumConstantDecl(decl))))
+end
+
+"""
+    cppvalue(::Type{CppEnumType{S,U}}, I) -> CppEnumValue
+A zero-initialized value of the enum type named `S`.
+"""
+function cppvalue(::Type{CppEnumType{S,U}}, I::CppInterpreter=@__INSTANCE__) where {S,U}
+    jlty = to_jl(to_cpp(CppEnumType{S,U}, I))
+    M = machine_type_of(jlty)
+    return CppEnumValue{get_s(jlty),M}(zero(M))
+end
+
+"""
+    @cppenum x
+The value of a C++ enumerator or a zero-initialized value of an enum type.
+
+    @cppenum CppEnum("red")        # the enumerator `red`
+    @cppenum CppEnumType("color")  # a zero-initialized `color`
+"""
+macro cppenum(x)
+    @gensym CC_INSTANCE
     return esc(quote
-                   $CC_VAR = CppObject{CppRef}($obj)
-                   finalizer($CC_VAR) do $CC_X
-                       CppCall.gcuse($obj)
-                       $CC_X
-                   end
-                   $CC_VAR
+                   local $CC_INSTANCE = CppCall.get_instance($__module__)
+                   CppCall.cppvalue($x, $CC_INSTANCE)
                end)
 end
+
+# Heap objects ------------------------------------------------------------------------------
 
 function cppnew(::Type{T}, I::CppInterpreter=@__INSTANCE__) where {T<:CppType{S,Q}} where {S,Q}
     s = string(S)
     haskey(DEFAULT_TYPE_MAPPING, s) && return cppnew(DEFAULT_TYPE_MAPPING[s], I)
     clty = to_cpp(T, I)
-    return heap_object(cppconstruct(I, clty), to_jl(clty))
+    return reinterpret(Ptr{to_jl(clty)}, cppconstruct(I, clty))
 end
 
 function cppnew(::Type{T}, I::CppInterpreter=@__INSTANCE__) where {T<:CppTemplate}
     clty = instantiate(T, I)
-    return heap_object(cppconstruct(I, clty), to_jl(clty))
+    return reinterpret(Ptr{to_jl(clty)}, cppconstruct(I, clty))
 end
 
 function cppnew(::Type{T}, I::CppInterpreter=@__INSTANCE__) where {T<:BuiltinTypes}
     clty = to_cpp(T, I)
-    return heap_object(cppconstruct(I, clty), to_jl(clty))
-end
-
-# a heap pointer is stored as a pointer-sized `CppObject`, which is what makes `@cppnew`,
-# `@ctor` and a function returning a pointer all produce the same kind of value
-function heap_object(ptr::Ptr{Cvoid}, jlty)
-    N = Core.sizeof(Int)
-    return CppObject{Ptr{jlty},N}(reinterpret(NTuple{N,UInt8}, ptr))
+    return reinterpret(Ptr{to_jl(clty)}, cppconstruct(I, clty))
 end
 
 """
     @cppnew cppty
-Allocate a C++ object that is of type `cppty` and return a pointer `CppObject`.
+Allocate a value-initialized C++ object of type `cppty` on the C++ heap and return a pointer
+to it. Release it with [`@cppdelete`](@ref).
 """
 macro cppnew(cppty)
     @gensym CC_INSTANCE
@@ -183,14 +203,13 @@ macro cppnew(cppty)
                end)
 end
 
-
-function cppdelete(x::CppObject{Ptr{T},N}, I::CppInterpreter=@__INSTANCE__) where {T,N}
-    return cppdeallocate(I, convert(Ptr{Cvoid}, x))
+function cppdelete(x::Ptr, I::CppInterpreter=@__INSTANCE__)
+    return cppdeallocate(I, reinterpret(Ptr{Cvoid}, x))
 end
 
 """
-    @cppdelete obj
-Deallocate/destruct the `obj` which is allocated by `@cppnew`/`@ctor`.
+    @cppdelete ptr
+Release storage obtained from `@cppnew` or `@ctor`. The destructor is not run.
 """
 macro cppdelete(obj)
     @gensym CC_INSTANCE
@@ -200,23 +219,7 @@ macro cppdelete(obj)
                end)
 end
 
-function cppderef(x::CppObject{Ptr{T},N}, I::CppInterpreter=@__INSTANCE__) where {T<:CppType{S,Q}} where {S,Q,N}
-    sz = size_of(get_ast_context(I), to_cpp(T, I))
-    return unsafe_load(reinterpret(Ptr{CppObject{T,sz}}, x.data))
-end
-
-"""
-    @* ptr
-Dereference the `ptr` which is allocated by `@cppnew`/`@ctor`.
-"""
-macro *(ptr)
-    @gensym CC_INSTANCE
-    return esc(quote
-                   local $CC_INSTANCE = CppCall.get_instance($__module__)
-                   CppCall.cppderef($ptr, $CC_INSTANCE)
-               end)
-end
-
+# Type spellings ----------------------------------------------------------------------------
 
 """
     @cpp_str -> CppType
