@@ -4,39 +4,31 @@ using ClangCompiler
 using ClangCompiler: AbstractClangType, AbstractType, AbstractBuiltinType, AbstractRecordType
 using ClangCompiler: AbstractValueDecl, getType
 using ClangCompiler: QualType, RecordType, EnumType, ElaboratedType, TypedefType, UsingType
-using ClangCompiler: TemplateSpecializationType, SubstTemplateTypeParmType
-using ClangCompiler: isTypeAlias, getAliasedType, isSugared, get_template_args
+using ClangCompiler: TemplateSpecializationType, SubstTemplateTypeParmType, get_template_args
 using ClangCompiler: PointerType, LValueReferenceType, RValueReferenceType
 using ClangCompiler: FunctionNoProtoType, FunctionProtoType, isNoThrow
-using ClangCompiler: CXXConstructorDecl, CXXDestructorDecl, CXXMethodDecl
 using ClangCompiler: AbstractNamedDecl
-using ClangCompiler: TypeDecl, RecordDecl, NamedDecl, CXXRecordDecl, ClassTemplateSpecializationDecl
+using ClangCompiler: CXXConstructorDecl, ClassTemplateSpecializationDecl
 using ClangCompiler: EnumConstantDecl, getEnumConstantDeclValue
-using ClangCompiler: getDecl, getTemplateArgs, getKind, getAsType
-using ClangCompiler: TemplateArgument, CXTemplateArgument_Type, CXTemplateArgument_Integral
+using ClangCompiler: getDecl, getTemplateArgs, getKind, getAsType, CXTemplateArgument_Type
 using ClangCompiler: get_type_ptr, get_qual_type, get_decl_type, get_pointee_type, desugar
 using ClangCompiler: get_return_type, get_params, get_param_num, get_param_type, get_integer_type
 using ClangCompiler: get_pointer_type
 using ClangCompiler: add_const, add_volatile, is_const, is_volatile
-using ClangCompiler: clty_to_jlty, jlty_to_clty, is_builtin_type
+using ClangCompiler: clty_to_jlty, jlty_to_clty
 using ClangCompiler: size_of
 using ClangCompiler: DeclFinder, get_decl, get_decls
+using ClangCompiler: JLLEnvs
 
 import ClangCompiler as CC
-
-using CppInterOp
-using CppInterOp: JLLEnvs
-using CppInterOp: create_interpreter, dispose
-using CppInterOp: addIncludePath, getptr, undo
-using CppInterOp: CXScope
-using CppInterOp: invoke, construct, destruct, allocate, deallocate
-using CppInterOp: getFunctionSignature, CXTemplateArgInfo, instantiateTemplate
 
 include("interpreter.jl")
 export initialize, is_valid, terminate
 export cppinclude, declare
 
 include("utils.jl")
+
+include("wrap.jl")
 
 include("lookup.jl")
 export LookupKind, TypeLookup, FuncLookup, FuncOverloadingLookup, lookup

@@ -5,11 +5,9 @@ authors = ["Yupei Qi <qiyupei@gmail.com>"]
 
 [deps]
 ClangCompiler = "06fc9500-c033-43bc-8ca2-e20da63309d9"
-CppInterOp = "13f4c181-cae7-41d1-84d4-2ea5f5fafb15"
 
 [compat]
 ClangCompiler = "~0.1"
-CppInterOp = "~0.1"
 julia = "1.12"
 
 [extras]

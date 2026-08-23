@@ -43,7 +43,7 @@ macro undo(i)
     @gensym CC_INSTANCE
     return esc(quote
                    local $CC_INSTANCE = CppCall.get_instance($__module__)
-                   CppCall.undo($CC_INSTANCE.interpreter, $i)
+                   CppCall.undo($CC_INSTANCE, $i)
                end)
 end
 
@@ -150,26 +150,23 @@ end
 function cppnew(::Type{T}, I::CppInterpreter=@__INSTANCE__) where {T<:CppType{S,Q}} where {S,Q}
     s = string(S)
     haskey(DEFAULT_TYPE_MAPPING, s) && return cppnew(DEFAULT_TYPE_MAPPING[s], I)
-    jlty = to_jl(to_cpp(T, I))
-    decl = lookup(I, s)
-    ptr = construct(make_scope(decl, I))
-    N = Core.sizeof(Int)
-    return CppObject{Ptr{jlty},N}(reinterpret(NTuple{N,UInt8}, ptr))
+    clty = to_cpp(T, I)
+    return heap_object(cppconstruct(I, clty), to_jl(clty))
 end
 
 function cppnew(::Type{T}, I::CppInterpreter=@__INSTANCE__) where {T<:CppTemplate}
-    scope = instantiate(T, I)
-    jlty = to_jl(to_cpp(ClassTemplateSpecializationDecl(scope.data[1]), I))
-    ptr = construct(scope)
-    N = Core.sizeof(Int)
-    return CppObject{Ptr{jlty},N}(reinterpret(NTuple{N,UInt8}, ptr))
+    clty = instantiate(T, I)
+    return heap_object(cppconstruct(I, clty), to_jl(clty))
 end
 
 function cppnew(::Type{T}, I::CppInterpreter=@__INSTANCE__) where {T<:BuiltinTypes}
     clty = to_cpp(T, I)
-    jlty = to_jl(clty)
-    sz = size_of(get_ast_context(I), clty)
-    ptr = allocate(sz)
+    return heap_object(cppconstruct(I, clty), to_jl(clty))
+end
+
+# a heap pointer is stored as a pointer-sized `CppObject`, which is what makes `@cppnew`,
+# `@ctor` and a function returning a pointer all produce the same kind of value
+function heap_object(ptr::Ptr{Cvoid}, jlty)
     N = Core.sizeof(Int)
     return CppObject{Ptr{jlty},N}(reinterpret(NTuple{N,UInt8}, ptr))
 end
@@ -187,14 +184,20 @@ macro cppnew(cppty)
 end
 
 
-cppdelete(x::CppObject{Ptr{T},N}) where {T,N} = deallocate(convert(Ptr{Cvoid}, x))
+function cppdelete(x::CppObject{Ptr{T},N}, I::CppInterpreter=@__INSTANCE__) where {T,N}
+    return cppdeallocate(I, convert(Ptr{Cvoid}, x))
+end
 
 """
     @cppdelete obj
 Deallocate/destruct the `obj` which is allocated by `@cppnew`/`@ctor`.
 """
 macro cppdelete(obj)
-    return esc(:(CppCall.cppdelete($obj)))
+    @gensym CC_INSTANCE
+    return esc(quote
+                   local $CC_INSTANCE = CppCall.get_instance($__module__)
+                   CppCall.cppdelete($obj, $CC_INSTANCE)
+               end)
 end
 
 function cppderef(x::CppObject{Ptr{T},N}, I::CppInterpreter=@__INSTANCE__) where {T<:CppType{S,Q}} where {S,Q,N}

@@ -46,19 +46,19 @@ struct CppIdentifier{S} end
     func = dispatch(I, candidates, params)
     isnothing(func) &&
         throw(ArgumentError("no matching function for call to `$(err_signature(first(candidates), params))`"))
-    scope = make_scope(func, I)
+    wrapper = get_wrapper(I, func)
     clty = get_return_type(clty_to_jlty(get_type_ptr(to_cpp(func, I)))) # TODO: cache func lookup results
     retty = to_jl(clty)
     if retty == Cvoid
         return quote
             Base.@_inline_meta
-            cppinvoke($scope, C_NULL, C_NULL, params...)
+            cppinvoke($wrapper, C_NULL, C_NULL, params...)
         end
     elseif retty <: CppRef
         return quote
             Base.@_inline_meta
             ret = CppObject{$retty}()
-            cppinvoke($scope, C_NULL, ret, params...)
+            cppinvoke($wrapper, C_NULL, ret, params...)
             return ret
         end
     else
@@ -66,7 +66,7 @@ struct CppIdentifier{S} end
         return quote
             Base.@_inline_meta
             ret = CppObject{$retty,$sz}()
-            cppinvoke($scope, C_NULL, ret, params...)
+            cppinvoke($wrapper, C_NULL, ret, params...)
             return ret
         end
     end
@@ -103,7 +103,7 @@ end
     ctor = dispatch(I, candidates, params)
     isnothing(ctor) &&
         throw(ArgumentError("no matching function for call to `$(err_signature(first(candidates), params))`"))
-    scope = make_scope(ctor, I)
+    wrapper = get_wrapper(I, ctor)
     record = lookup(I, string(S), TypeLookup())
     clty = to_cpp(record, I)
     retty = to_jl(clty)
@@ -112,7 +112,7 @@ end
         Base.@_inline_meta
         # ret = CppObject{$retty,$sz}()
         ret = CppObject{Ptr{$retty},Core.sizeof(Int)}()
-        cppinvoke($scope, C_NULL, ret, params...)
+        cppinvoke($wrapper, C_NULL, ret, params...)
         return ret
     end
 end
@@ -192,19 +192,19 @@ get_class(::Type{S}) where {N,T<:CppTemplate,S<:CppObject{CppCPtr{T},N}} = get_c
     func = dispatch(I, candidates, params)
     isnothing(func) &&
         throw(ArgumentError("no matching function for call to `$(err_signature(first(candidates), params))`"))
-    scope = make_scope(func, I)
+    wrapper = get_wrapper(I, func)
     clty = get_return_type(clty_to_jlty(get_type_ptr(to_cpp(func, I)))) # TODO: cache func lookup results
     retty = to_jl(clty)
     if retty == Cvoid
         return quote
             Base.@_inline_meta
-            cppinvoke($scope, obj, C_NULL, params...)
+            cppinvoke($wrapper, obj, C_NULL, params...)
         end
     elseif retty <: CppRef
         return quote
             Base.@_inline_meta
             ret = CppObject{$retty}()
-            cppinvoke($scope, obj, ret, params...)
+            cppinvoke($wrapper, obj, ret, params...)
             return ret
         end
     else
@@ -212,7 +212,7 @@ get_class(::Type{S}) where {N,T<:CppTemplate,S<:CppObject{CppCPtr{T},N}} = get_c
         return quote
             Base.@_inline_meta
             ret = CppObject{$retty,$sz}()
-            cppinvoke($scope, obj, ret, params...)
+            cppinvoke($wrapper, obj, ret, params...)
             return ret
         end
     end
@@ -220,17 +220,18 @@ end
 
 function dispatch(I::CppInterpreter, candidates::Vector{T}, params) where {T<:AbstractNamedDecl}
     func = nothing
-    no_throw = false
     for x in candidates
         ty = clty_to_jlty(get_type_ptr(to_cpp(x, I)))
         dispatch(I, ty, params) || continue
         # FIXME: use OverloadCandidateSet
         if !isnothing(func)
-            # skip noexcept methods
             ty_func = clty_to_jlty(get_type_ptr(to_cpp(func, I)))
-            isNoThrow(ty_func) ⊻ isNoThrow(ty) || continue
-            CC.dump(x)
-            CC.dump(func)
+            if isNoThrow(ty_func) ⊻ isNoThrow(ty)
+                # the two differ only in whether they are `noexcept`, which is not something
+                # the argument types can pick between: keep the one without it
+                isNoThrow(ty_func) && (func = x)
+                continue
+            end
             throw(ArgumentError("call of overloaded `$(err_signature(func, params))` is ambiguous."))
         end
         func = x
@@ -258,32 +259,39 @@ end
 
 @inline dispatch(I::CppInterpreter, x::RecordType, params) = true # constructor or destructor
 
-@inline function cppinvoke(x::CXScope, self::Ptr{Cvoid}, result::Union{CppObject,Ptr}, params...)
-    ret_ptr = unsafe_pointer_rt(result)
-    arg_ptrs = [unsafe_pointer(params[i]) for i = 1:(length(params) ÷ 2)]
-    return GC.@preserve result params invoke(x, ret_ptr, arg_ptrs, self)
+# `x` is the address of the trampoline `wrap.jl` compiled for the callee: it takes the
+# object, an array of pointers to the arguments, and storage for the result.
+@inline function trampoline(x::Ptr{Cvoid}, self::Ptr{Cvoid}, ret::Ptr{Cvoid},
+                            args::Vector{Ptr{Cvoid}})
+    return ccall(x, Cvoid, (Ptr{Cvoid}, Ptr{Ptr{Cvoid}}, Ptr{Cvoid}), self, args, ret)
 end
 
-@inline function cppinvoke(x::CXScope, self::S, result::Union{CppObject,Ptr},
+@inline function cppinvoke(x::Ptr{Cvoid}, self::Ptr{Cvoid}, result::Union{CppObject,Ptr}, params...)
+    ret_ptr = unsafe_pointer_rt(result)
+    arg_ptrs = Ptr{Cvoid}[unsafe_pointer(params[i]) for i = 1:(length(params) ÷ 2)]
+    return GC.@preserve result params trampoline(x, self, ret_ptr, arg_ptrs)
+end
+
+@inline function cppinvoke(x::Ptr{Cvoid}, self::S, result::Union{CppObject,Ptr},
                            params...) where {N,T<:Union{CppType,CppTemplate},S<:CppObject{T,N}}
     ret_ptr = unsafe_pointer_rt(result)
-    arg_ptrs = [unsafe_pointer(params[i]) for i = 1:(length(params) ÷ 2)]
+    arg_ptrs = Ptr{Cvoid}[unsafe_pointer(params[i]) for i = 1:(length(params) ÷ 2)]
     self_ptr = unsafe_pointer(self)
-    return GC.@preserve self result params invoke(x, ret_ptr, arg_ptrs, self_ptr)
+    return GC.@preserve self result params trampoline(x, self_ptr, ret_ptr, arg_ptrs)
 end
 
-@inline function cppinvoke(x::CXScope, self::S, result::Union{CppObject,Ptr},
+@inline function cppinvoke(x::Ptr{Cvoid}, self::S, result::Union{CppObject,Ptr},
                            params...) where {N,T,S<:CppObject{Ptr{T},N}}
     ret_ptr = unsafe_pointer_rt(result)
-    arg_ptrs = [unsafe_pointer(params[i]) for i = 1:(length(params) ÷ 2)]
+    arg_ptrs = Ptr{Cvoid}[unsafe_pointer(params[i]) for i = 1:(length(params) ÷ 2)]
     self_ptr = reinterpret(Ptr{Cvoid}, self.data)
-    return GC.@preserve self result params invoke(x, ret_ptr, arg_ptrs, self_ptr)
+    return GC.@preserve self result params trampoline(x, self_ptr, ret_ptr, arg_ptrs)
 end
 
-@inline function cppinvoke(x::CXScope, self::S, result::Union{CppObject,Ptr},
+@inline function cppinvoke(x::Ptr{Cvoid}, self::S, result::Union{CppObject,Ptr},
                            params...) where {N,T,S<:CppObject{CppRef{T},N}}
     ret_ptr = unsafe_pointer_rt(result)
-    arg_ptrs = [unsafe_pointer(params[i]) for i = 1:(length(params) ÷ 2)]
+    arg_ptrs = Ptr{Cvoid}[unsafe_pointer(params[i]) for i = 1:(length(params) ÷ 2)]
     self_ptr = reinterpret(Ptr{Cvoid}, self.data)
-    return GC.@preserve self result params invoke(x, ret_ptr, arg_ptrs, self_ptr)
+    return GC.@preserve self result params trampoline(x, self_ptr, ret_ptr, arg_ptrs)
 end

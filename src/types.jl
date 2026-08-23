@@ -308,7 +308,15 @@ to_cpp(::Type{T}, I::CppInterpreter) where {T<:AbstractCppType} = error("Unsuppo
 to_cpp(::Type{T}, I::CppInterpreter) where {T<:BuiltinTypes} = get_qual_type(jlty_to_clty(T, get_ast_context(I)))
 to_cpp(::Type{Ptr{T}}, I::CppInterpreter) where {T<:BuiltinTypes} = get_pointer_type(get_ast_context(I), to_cpp(T, I))
 
-to_cpp(x::AbstractNamedDecl, I::CppInterpreter) = get_decl_type(get_ast_context(I), x)
+# lookups hand back the `NamedDecl` base carrier, so the concrete kind has to be recovered
+# before asking for a type: a value declaration (a function, a variable, an enumerator) has
+# the type it was declared with, while a type declaration *is* one
+function to_cpp(x::AbstractNamedDecl, I::CppInterpreter)
+    decl = CC.resolve(x)
+    decl isa AbstractValueDecl && return getType(decl)
+    return get_decl_type(get_ast_context(I), decl)
+end
+
 to_cpp(x::AbstractValueDecl, I::CppInterpreter) = getType(x)
 
 function to_cpp(::Type{Ptr{T}}, I::CppInterpreter) where {T<:CppType{S,Q}} where {S,Q}
@@ -332,22 +340,17 @@ function to_cpp(::Type{CppType{S,Q}}, I::CppInterpreter) where {S,Q}
     return qty
 end
 
-TemplateArgInfo(x::QualType) = CXTemplateArgInfo(x.ptr)
-
+"""
+    instantiate(::Type{T}, I::CppInterpreter) where {T<:CppTemplate} -> QualType
+Return the Clang type of the class template specialization `T` names, instantiating it in
+the interpreter if this is the first time it is asked for.
+"""
 function instantiate(::Type{CppTemplate{T,TARGS}}, I::CppInterpreter) where {S,Q,T<:CppType{S,Q},TARGS}
-    template_decl = lookup(I, string(S)) # ClassTemplateDecl
-    args = [TemplateArgInfo(to_cpp(t, I)) for t in TARGS.types]
-    scope = instantiateTemplate(make_scope(template_decl, I), args)
-    return scope
+    args = join((spell(I, to_cpp(t, I)) for t in TARGS.types), ", ")
+    return specialize(I, string(S) * "<" * args * ">")
 end
 
-to_cpp(x::ClassTemplateSpecializationDecl, I::CppInterpreter) = get_decl_type(get_ast_context(I), x)
-
-function to_cpp(::Type{T}, I::CppInterpreter) where {T<:CppTemplate}
-    scope = instantiate(T, I)
-    ctsd = ClassTemplateSpecializationDecl(scope.data[1])
-    return get_decl_type(get_ast_context(I), ctsd)
-end
+to_cpp(::Type{T}, I::CppInterpreter) where {T<:CppTemplate} = instantiate(T, I)
 
 # FIXME: Add support for enum class scope
 function to_cpp(::Type{CppEnumType{S,T}}, I::CppInterpreter) where {S,T}
@@ -440,12 +443,14 @@ function to_jl(x::EnumType, q::Qualifier=Unqualified)
 end
 
 function to_jl(x::AbstractRecordType, q::Qualifier=Unqualified)
-    ctsd = ClassTemplateSpecializationDecl(getDecl(x))
-    if ctsd.ptr == C_NULL
+    decl = getDecl(x)
+    # a plain record is not a specialization, and the cast to one is checked
+    if !CC.isClassTemplateSpecializationDecl(decl)
         n = get_name(x)
         sym = isempty(n) ? gensym() : Symbol(n)
         return CppType{sym,q}
     end
+    ctsd = ClassTemplateSpecializationDecl(decl)
     args = getTemplateArgs(ctsd)
     targs = []
     for n = 0:(size(args) - 1)

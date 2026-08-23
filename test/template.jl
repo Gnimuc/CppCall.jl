@@ -44,7 +44,9 @@ end
     StdString = cpp"std::string"
     clty = to_cpp(StdString, CppCall.@__INSTANCE__)
     jlty = to_jl(clty)
-    @test jlty == @template cpp"std::basic_string"{Cuchar} # std::string is an alias of std::basic_string<char>
+    # std::string is an alias of std::basic_string<char>; Clang stores a template-id's
+    # converted arguments, so the defaulted traits and allocator are part of the type
+    @test jlty == @template cpp"std::basic_string"{Cuchar, @template(cpp"std::char_traits"{Cuchar}), @template cpp"std::allocator"{Cuchar}}
 
     clty2 = to_cpp(jlty, CppCall.@__INSTANCE__)
     jlty2 = to_jl(clty2)
