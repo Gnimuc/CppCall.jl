@@ -44,17 +44,23 @@ end
     StdString = cpp"std::string"
     clty = to_cpp(StdString, CppCall.@__INSTANCE__)
     jlty = to_jl(clty)
-    # std::string is an alias of std::basic_string<char>; Clang stores a template-id's
-    # converted arguments, so the defaulted traits and allocator are part of the type.
-    # `char` maps to `Cchar` -- it is a signed 8-bit type here, and reading one as `Cuchar`
-    # is what used to turn -56 into 200.
-    StdStringTy = @template cpp"std::basic_string"{Cchar, @template(cpp"std::char_traits"{Cchar}),
-                                                   @template(cpp"std::allocator"{Cchar})}
-    @test jlty == StdStringTy
 
+    # `std::string` reaches us as the alias's SUGAR, and how many arguments that carries is the
+    # standard library's business: libstdc++ writes `typedef basic_string<char> string`, and
+    # whether clang reports the one written argument or the three converted ones differs across
+    # the platform's headers -- one on the Linux shard, three on the Darwin one. Assert what is
+    # actually about the mapping instead of what the host happens to spell.
+    @test jlty <: CppTemplate
+    @test CppCall.get_t(jlty) == cpp"std::basic_string"
+    # `char` maps to `Cchar`; reading one as `Cuchar` is what used to turn -56 into 200
+    @test first(CppCall.get_targs(jlty).types) === Cchar
+
+    # Going back through `to_cpp` canonicalizes, and a canonical specialization always carries
+    # the full argument list -- so this one IS exact, on every platform.
     clty2 = to_cpp(jlty, CppCall.@__INSTANCE__)
     jlty2 = to_jl(clty2)
-    @test jlty2 == StdStringTy
+    @test jlty2 == @template cpp"std::basic_string"{Cchar, @template(cpp"std::char_traits"{Cchar}),
+                                                    @template(cpp"std::allocator"{Cchar})}
 end
 
 @testset "CppTemplate | Method Call" begin
