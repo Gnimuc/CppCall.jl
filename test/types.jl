@@ -43,9 +43,14 @@ end
     declare(I, """#include <ctime> """)
 
     # clock_t clock();
+    # `clock_t` is implementation-defined -- `unsigned long` on Darwin, `long` on glibc -- so
+    # the portable thing to assert here is that the lookup reached a real libc function through
+    # a system header and mapped its return to an integer. The exact mappings are pinned below
+    # on `type.h`, whose signatures this repo controls.
     clty = to_cpp(lookup(I, "clock", FuncLookup()), I)
     func = to_jl(clty)
-    @test get_rt(func) == Culong
+    @test get_rt(func) <: Integer
+    @test sizeof(get_rt(func)) == sizeof(Clong)
     @test get_argst(func) == Tuple{}
 
     cppinclude(I, joinpath(@__DIR__, "include"))
